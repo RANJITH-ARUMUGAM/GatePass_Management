@@ -1,0 +1,33 @@
+.card-container {
+  padding: 2rem;
+  background-color: #0f172a;
+  min-height: 100vh;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+
+.info-card {
+  background-color: #1e293b;
+  border-left: 6px solid;
+  border-radius: 10px;
+  padding: 1.5rem;
+  color: white;
+  transition: transform 0.3s ease;
+}
+
+.info-card:hover {
+  transform: scale(1.02);
+}
+
+.info-button {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  border: none;
+  color: white;
+  border-radius: 5px;
+  cursor: pointer;
+}

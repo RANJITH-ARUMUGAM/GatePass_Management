@@ -1,0 +1,354 @@
+/* /////////////////////////////////////////////////////  Root and Body Start  ////////////////////////////////////////////////////////////////// */
+
+:root {
+  --transition-duration: 0.3s;
+  --transition-easing: ease;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow-x: hidden;
+  font-family: 'Segoe UI', sans-serif;
+  background-color: #FEFCFB;
+}
+
+/* Layout */
+.layout-unique {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+/* /////////////////////////////////////////////////////  Root and Body END ////////////////////////////////////////////////////////////////// */
+
+/* /////////////////////////////////////////////////////  Top Nav Start ////////////////////////////////////////////////////////////////// */
+
+.top-navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 80px;
+  background: linear-gradient(90deg,
+      rgb(24, 24, 53) 0%,
+      rgb(3, 116, 197) 100%);
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 90px;
+  transition: left var(--transition-duration) var(--transition-easing);
+  z-index: 1000;
+}
+
+.sidebar-unique.open-unique+.top-navbar {
+  left: 265px;
+}
+
+/* ///////////////////////////////////////////////////////// Top Nav END ////////////////////////////////////////////////////////////// */
+
+
+
+/* ////////////////////////////////////////////////////////// Aside (Sidebar) Start  ///////////////////////////////////////////////////////////// */
+
+/* Sidebar Container */
+.sidebar-unique {
+  width: 85px;
+  background: linear-gradient(90deg,
+      rgb(3, 116, 197) 0%,
+      rgb(24, 24, 53) 100%);
+  color: white;
+  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  transition: width var(--transition-duration) var(--transition-easing);
+  z-index: 1001;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0;
+  margin: 0;
+}
+
+/* Expanded Sidebar */
+.sidebar-unique.open-unique {
+  width: 265px;
+}
+
+/* Toggle Button */
+.toggle-btn {
+  background: transparent;
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-size: 25px;
+  padding: 20px 30px;
+  transition: color var(--transition-duration) var(--transition-easing);
+}
+
+.toggle-btn:hover {
+  color: #ddd;
+}
+
+/* Logo Section */
+.sidebar-logo {
+  margin: auto 0;
+}
+
+.sidebar-logo a {
+  color: #ffffff;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+
+/* Collapsed State Styles */
+.sidebar-unique:not(.open-unique) .sidebar-logo,
+.sidebar-unique:not(.open-unique) .sidebar-link span {
+  display: none !important;
+}
+
+.sidebar-unique.open-unique .sidebar-logo,
+.sidebar-unique.open-unique .sidebar-link span {
+  display: block !important;
+}
+
+/* Navigation List */
+.nav-list-unique {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  margin-left: 7px;
+  padding-right: 7px;
+}
+
+.sidebar-item {
+  position: relative;
+}
+
+/* Navigation Links */
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  padding: 10px 20px;
+  color: #fff;
+  text-decoration: none;
+  font-size: 1rem;
+  font-weight: 600;
+  white-space: nowrap;
+  border-left: 3px solid transparent;
+  transition: background var(--transition-duration) var(--transition-easing);
+  position: relative;
+}
+
+.sidebar-link:hover,
+.sidebar-link.active {
+  background: linear-gradient(90deg,
+      rgba(75, 123, 158, 0.199) 0%,
+      rgb(96, 180, 240) 100%);
+  color: white;
+}
+
+.sidebar-link i {
+  font-size: 1.5rem;
+  width: 28px;
+  min-width: 32px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.75rem;
+  color: white;
+}
+
+.sidebar-link span {
+  display: inline;
+}
+
+/* Dropdown Menus */
+.sidebar-dropdown {
+  padding-left: 0;
+  margin-left: 0;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  margin-top: 2px;
+  margin-bottom: 2px;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition:
+    max-height 0.3s ease,
+    opacity 0.3s ease,
+    visibility 0.3s ease;
+  visibility: hidden;
+  display: block !important;
+}
+
+/* Dropdown Show State */
+.sidebar-dropdown.show {
+  max-height: auto !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* Collapsed Dropdown State */
+.sidebar-unique:not(.open-unique) .sidebar-dropdown {
+  max-height: 0 !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* Expanded Dropdown State */
+.sidebar-unique.open-unique .sidebar-dropdown {
+  display: block;
+}
+
+/* Dropdown Links */
+.sidebar-dropdown .sidebar-link {
+  font-size: 0.9rem;
+  padding: 8px 15px 8px 3rem;
+  color: #e0e0e0;
+  border-left: none;
+}
+
+.sidebar-dropdown .sidebar-link:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+
+/* Dropdown Arrow Indicators */
+.sidebar-unique.open-unique .sidebar-link[data-bs-toggle="collapse"]::after {
+  content: "";
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  display: inline-block;
+  padding: 3px;
+  position: absolute;
+  right: 1.5rem;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+  transition: transform var(--transition-duration) var(--transition-easing);
+}
+
+.sidebar-unique.open-unique .sidebar-link[data-bs-toggle="collapse"]:not(.collapsed)::after {
+  transform: translateY(-50%) rotate(135deg);
+}
+
+.sidebar-unique:not(.open-unique) .sidebar-link[data-bs-toggle="collapse"]::after {
+  content: none !important;
+}
+
+.collapse:not(.show) {
+  display: none;
+}
+
+.collapsing {
+  position: relative;
+  height: 0;
+  overflow: hidden;
+  transition: height 0.3s ease;
+}
+
+
+/* Bootstrap Collapse Overrides */
+.sidebar-dropdown.collapse:not(.show) {
+  display: block !important;
+  max-height: 0 !important;
+  opacity: 0 !important;
+}
+
+.sidebar-dropdown.collapse.show {
+  display: block !important;
+  max-height: 500px !important;
+  opacity: 1 !important;
+}
+
+/* ////////////////////////////////////////////////////////// Aside (Sidebar) End  ///////////////////////////////////////////////////////////// */
+
+
+/* /////////////////////////////////////////////////////////// Main Content Start //////////////////////////////////////////////////////////// */
+
+/* Main Content */
+.main-content-unique {
+  flex: 1;
+  margin-top: 80px;
+  margin-left: 80px;
+  padding: 10px;
+  margin-bottom: 0;
+  transition: margin-left var(--transition-duration) var(--transition-easing);
+  /* background-color: #FEFCFB; */
+  min-height: calc(100vh - 80px);
+  overflow-x: hidden;
+}
+
+.sidebar-unique.open-unique+.top-navbar+.main-content-unique {
+  margin-left: 135px;
+}
+
+.main-content-unique h2 {
+  font-size: 1rem;
+  font-weight: bold;
+  background: linear-gradient(90deg,rgb(24, 24, 53) 0%,rgb(3, 116, 197) 100%);
+  color: white;
+  margin-top: 0;
+  padding: 2px;
+  padding-left: 10px;
+  border-radius: 10px;
+  margin: 0px;
+}
+
+/* /////////////////////////////////////////////////////////// Main Content End //////////////////////////////////////////////////////////// */
+
+
+
+/* //////////////////////////////////////////////////////////// Shared/Utility Styles Start  /////////////////////////////////////////////////////////// */
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+.shift-right-unique {
+  margin-left: 125px;
+  left: 145px;
+  transition: margin-left var(--transition-duration) var(--transition-easing), left var(--transition-duration) var(--transition-easing);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .sidebar-unique {
+    transform: translateX(-100%);
+    width: 265px;
+  }
+
+  .sidebar-unique.open-unique {
+    transform: translateX(0);
+  }
+
+  .top-navbar {
+    left: 0;
+  }
+
+  .main-content-unique {
+    margin-left: 0;
+  }
+}
+
+/* //////////////////////////////////////////////////////////// Shared/Utility Styles End  /////////////////////////////////////////////////////////// */
