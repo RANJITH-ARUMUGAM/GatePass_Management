@@ -233,16 +233,49 @@ export default function Topnavbar({ isSidenavOpen }) {
   return (
     <nav className={`top-navbar ${isSidenavOpen ? 'shift-right-unique' : ''}`}>
       <div className="home-container">
-        <h1 className="company-name">Dowell Tech</h1>
+        <h1 className="company-name">Dowell Technologies</h1>
 
         <div className="user-info">
           <button
-            onClick={handlePunchToggle}
-            className="p-3 py-2 bg-gray-900 text-white rounded font-semibold shadow hover:bg-gray-800 transition flex items-center gap-2"
-          >
-            <Fingerprint size={18} />
-            {isPunchedIn ? 'Punch Out' : 'Punch In'}
-          </button>
+  onClick={handlePunchToggle}
+  className={`p-1 py-1 bg-gray-900 text-white rounded-full shadow-lg transition-all duration-300 flex items-center justify-center relative overflow-hidden group hover:shadow-xl hover:scale-105 ${isPunchedIn ? 'hover:bg-red-700' : 'hover:bg-green-700'}`}
+  style={{ position: 'relative', width: 42, height: 42 }}
+  aria-label={isPunchedIn ? 'Punch Out' : 'Punch In'}
+>
+  {/* Circular hover effect */}
+  <span
+    className={`absolute left-1 top-1 w-10 h-10 rounded-full transition-all duration-300 opacity-0 group-hover:opacity-100 ${isPunchedIn ? 'bg-red-600' : 'bg-green-600'}`}
+    style={{ zIndex: 0 }}
+  ></span>
+  
+  {/* Icon container */}
+  <span 
+    style={{ 
+      zIndex: 1, 
+      position: 'relative', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      width: '100%', 
+      height: '100%',
+      transition: 'all 0.3s ease'
+    }}
+    className="group-hover:scale-110"
+  >
+    <Fingerprint 
+      size={30} 
+      color={isPunchedIn ? '#dc2626' : '#16a34a'} 
+      className="transition-all duration-300 group-hover:drop-shadow-lg"
+    />
+  </span>
+  
+  {/* Optional: Add text labels that appear on hover */}
+  <span 
+    className={`absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-xs font-medium px-2 py-1 rounded transition-all duration-300 opacity-0 group-hover:opacity-100 whitespace-nowrap ${isPunchedIn ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}
+  >
+    {isPunchedIn ? 'Punch Out' : 'Punch In'}
+  </span>
+</button>
 
           {/* Notifications Drawer Trigger */}
           <div className="notification-container">

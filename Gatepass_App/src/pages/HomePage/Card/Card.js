@@ -58,11 +58,11 @@ const Badge = ({ status }) => {
       text = 'Denied';
       break;
     case 'Outward':
-      colorClass = 'bg-red-100 text-white-800';
+      colorClass = 'bg-red-500 text-white-800';
       text = 'Outward';
       break;
     case 'Inward':
-      colorClass = 'bg-green-100 text-white-800';
+      colorClass = 'bg-green-500 text-white-800';
       text = 'Inward';
       break;
     default:
@@ -778,266 +778,289 @@ export default function Cards({ setTitle }) {
       {/* /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// */}
 
 
-      {/* 2. Upcoming Visitor Schedule */}
-      <h2 className="text-xl font-semibold mb-2 text-gray-800 text-center rounded-xl shadow">Upcoming Visitor Schedule</h2>
 
-      <Card className="p-1 mb-8 mt-0 pt-1">
-        <div className="flex justify-between mb-2">
-          <input type="text" value={searchupcomingVisitors} onChange={(e) => {
-            setsearchUpcomingVisitors(e.target.value);
-            setpageUpcomingVisitors(1);
-          }}
-            placeholder="Search upcoming visitors"
-            className="px-1 py-.5 text-sm border rounded"
-          />
-          <div>
-            <button onClick={() => setpageUpcomingVisitors((p) => Math.max(p - 1, 1))} disabled={pageupcomingVisitors === 1} className="px-1 py-.5 text-xs border rounded mr-1"> Prev </button>
-            <span className="text-xs">{pageupcomingVisitors}</span>
-            <button onClick={() => setpageUpcomingVisitors((p) => p * itemsPerPage < upcomingVisitors.filter(v => v.name?.toLowerCase().includes(searchupcomingVisitors.toLowerCase()) || v.organization?.toLowerCase().includes(searchupcomingVisitors)).length ? p + 1 : p)}
-              className="px-1 py-.5 text-xs border rounded ml-1">Next
-            </button>
-          </div>
+      {/* 2 & 3. Upcoming Visitor Schedule & Live Visitor Monitoring (side by side, responsive) */}
+      <div className="grid grid-cols-1 gap-4 mb-8 sm:grid-cols-1 md:grid-cols-1 lg:grid-cols-2 lg:gap-4">
+        {/* Upcoming Visitor Schedule */}
+        <div>
+          <h2 className="text-lg font-semibold mb-2 text-gray-800 text-center rounded-xl shadow">Upcoming Visitor Schedule</h2>
+          <Card className="p-1 pt-1 mb-4">
+            <div className="flex justify-between mb-2">
+              <input type="text" value={searchupcomingVisitors} onChange={(e) => {
+                setsearchUpcomingVisitors(e.target.value);
+                setpageUpcomingVisitors(1);
+              }}
+                placeholder="Search upcoming visitors"
+                className="px-1 py-.5 text-xs border rounded w-2/3"
+              />
+              <div>
+                <button onClick={() => setpageUpcomingVisitors((p) => Math.max(p - 1, 1))} disabled={pageupcomingVisitors === 1} className="px-1 py-.5 text-xs border rounded mr-1"> Prev </button>
+                <span className="text-xs">{pageupcomingVisitors}</span>
+                <button onClick={() => setpageUpcomingVisitors((p) => p * itemsPerPage < upcomingVisitors.filter(v => v.name?.toLowerCase().includes(searchupcomingVisitors.toLowerCase()) || v.organization?.toLowerCase().includes(searchupcomingVisitors)).length ? p + 1 : p)}
+                  className="px-1 py-.5 text-xs border rounded ml-1">Next
+                </button>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-xs">
+                <thead>
+                  <tr>
+                    <th className="px-2 py-1">Visitor & Host</th>
+                    <th className="px-2 py-1">Schedule Time</th>
+                    <th className="px-2 py-1">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {upcomingVisitors.length > 0 ? (
+                    upcomingVisitors
+                      .filter(v => v.name?.toLowerCase().includes(searchupcomingVisitors.toLowerCase()) || v.organization?.toLowerCase().includes(searchupcomingVisitors))
+                      .slice((pageupcomingVisitors - 1) * itemsPerPage, pageupcomingVisitors * itemsPerPage)
+                      .map((visitor, idx) => (
+                        <tr key={visitor.id}>
+                          <td className="px-2 py-1">
+                            <div className="inline-flex items-center px-1 py-.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700">{visitor.name} ({visitor.organization})</div>
+                            <div className="text-xs font-medium text-gray-900"> TO MEET: {visitor.host}</div>
+                            <div className="inline-flex items-center px-1 py-.5 font-small rounded-md shadow-sm text-xs text-white bg-yellow-500">PURPOSE: {visitor.purpose}</div>
+                          </td>
+                          <td className="px-2 py-1">{visitor.time}</td>
+                          <td className="px-2 py-1">
+                            {visitor.status === 'Pending' ? (
+                              <div className="space-x-1">
+                                <button
+                                  onClick={() => handleUpcomingAction(visitor.id, 'approve')}
+                                  className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700"
+                                >
+                                  <CheckCircle className="w-3 h-3 mr-1" /> Approve
+                                </button>
+                                <button
+                                  onClick={() => handleUpcomingAction(visitor.id, 'deny')}
+                                  className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700"
+                                >
+                                  <XCircle className="w-3 h-3 mr-1" /> Deny
+                                </button>
+                              </div>
+                            ) : (
+                              <Badge status={visitor.status} />
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                  ) : (
+                    <tr>
+                      <td className="px-2 py-4 text-center text-gray-500" colSpan="3">No upcoming visitors scheduled.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         </div>
 
-        <table>
-          <thead>
-            <tr>
-              <th>Visitor & Host</th>
-              <th>Schedule Time</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {upcomingVisitors.length > 0 ? (
-              upcomingVisitors
-                .filter(v => v.name?.toLowerCase().includes(searchupcomingVisitors.toLowerCase()) || v.organization?.toLowerCase().includes(searchupcomingVisitors))
-                .slice((pageupcomingVisitors - 1) * itemsPerPage, pageupcomingVisitors * itemsPerPage)
-                .map((visitor, idx) => (
-                  <tr key={visitor.id}>
-                    <td>
-                      <div className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">{visitor.name} ({visitor.organization})</div>
-                      <div className="text-sm font-medium text-gray-900"> TO MEET: {visitor.host}</div>
-                      <div className="inline-flex items-center px-1 py-.5 font-small rounded-md shadow-sm text-xs text-white bg-yellow-500 hover:bg-yellow-500">PURPOSE: {visitor.purpose}</div>
-                    </td>
-                    <td>{visitor.time}</td>
-                    <td>
-                      {visitor.status === 'Pending' ? (
-                        <div className="space-x-2">
-                          <button
-                            onClick={() => handleUpcomingAction(visitor.id, 'approve')}
-                            className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                          >
-                            <CheckCircle className="w-4 h-4 mr-1" /> Approve
-                          </button>
-                          <button
-                            onClick={() => handleUpcomingAction(visitor.id, 'deny')}
-                            className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                          >
-                            <XCircle className="w-4 h-4 mr-1" /> Deny
-                          </button>
-                        </div>
-                      ) : (
-                        <Badge status={visitor.status} />
-                      )}
-                    </td>
+        {/* Live Visitor Monitoring */}
+        <div>
+          <h2 className="text-lg font-semibold mb-2 text-gray-800 text-center rounded-xl shadow">Live Visitor Monitoring</h2>
+          <Card className="p-1 pt-1 mb-4">
+            <div className="flex justify-between mb-2">
+              <input type="text" value={searchLiveVisitors} onChange={(e) => {
+                setSearchLiveVisitors(e.target.value);
+                setpageLiveVisitors(1); // Reset page on new search
+              }}
+                placeholder="Search by name or phone"
+                className="px-1 py-.5 text-xs border rounded w-2/3"
+              />
+              <div>
+                <button onClick={() => setpageLiveVisitors((p) => Math.max(p - 1, 1))} disabled={pageLiveVisitors === 1} className="px-1 py-.5 text-xs border rounded mr-1"> Prev </button>
+                <span className="text-xs">{pageLiveVisitors}</span>
+                <button onClick={() => setpageLiveVisitors((p) => p * itemsPerPage < liveVisitors.filter(visitor => visitor.name.toLowerCase().includes(searchLiveVisitors.toLowerCase()) || visitor.phone.includes(searchLiveVisitors)).length ? p + 1 : p)}
+                  className="px-1 py-.5 text-xs border rounded ml-1">Next
+                </button>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-xs">
+                <thead>
+                  <tr>
+                    <th className="px-2 py-1">Name & Phone</th>
+                    <th className="px-2 py-1">To Meet</th>
+                    <th className="px-2 py-1">Time In/Out</th>
+                    <th className="px-2 py-1">Actions</th>
                   </tr>
-                ))
-            ) : (
-              <tr>
-                <td>No upcoming visitors scheduled.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </Card>
-
+                </thead>
+                <tbody>
+                  {liveVisitors.length > 0 ? (
+                    liveVisitors
+                      .filter(visitor => visitor.name.toLowerCase().includes(searchLiveVisitors.toLowerCase()) || visitor.phone.includes(searchLiveVisitors))
+                      .slice((pageLiveVisitors - 1) * itemsPerPage, pageLiveVisitors * itemsPerPage)
+                      .map((visitor) => (
+                        <tr key={visitor.id}>
+                          <td className="px-2 py-1">
+                            <div className="flex items-center space-x-2">
+                              <img
+                                className="h-8 w-8 rounded-full object-cover"
+                                src={`${SERVER_PORT}/visitor-image/${visitor.id}`}
+                                alt={visitor.name}
+                                onError={(e) => {
+                                  if (!e.target.src.includes('/default-avatar.png')) {
+                                    e.target.onerror = null;
+                                    e.target.src = '/default-avatar.png';
+                                  }
+                                }}
+                              />
+                              <div>
+                                <div className="text-xs font-medium text-gray-900">{visitor.name}</div>
+                                <div className="text-xs text-gray-500">{visitor.phone}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-2 py-1">{visitor.tomeet}</td>
+                          <td className="px-2 py-1">
+                            <div className="text-xs text-gray-900">
+                              In: {visitor.entrytime ? visitor.entrytime : 'N/A'}{" "}
+                              <CheckCircle className="w-3 h-3 mr-1 inline-flex items-center gap-1 text-xs text-green-600" />
+                            </div>
+                          </td>
+                          <td className="px-2 py-1">
+                            {visitor.status === 'Accepted' ? (
+                              <button
+                                onClick={() => handleManualCheckout(visitor.id)}
+                                className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700"
+                              >
+                                <UserX className="w-3 h-3 mr-1" /> Checkout
+                              </button>
+                            ) : (
+                              <Badge status={visitor.status} />
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                  ) : (
+                    <tr>
+                      <td className="px-2 py-4 text-center text-gray-500" colSpan="4">No visitors currently inside.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      </div>
 
       {/* /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// */}
 
-
-      {/* 3. Live Visitor Monitoring */}
-      <h2 className="text-xl font-semibold mb-0 text-gray-800 text-center rounded-xl shadow">Live Visitor Monitoring</h2>
-      <Card className="p-1 mb-8 mt-0 pt-1">
-        <div className="flex justify-between mb-2">
-          <input type="text" value={searchLiveVisitors} onChange={(e) => {
-            setSearchLiveVisitors(e.target.value);
-            setpageLiveVisitors(1); // Reset page on new search
-          }}
-            placeholder="Search by name or phone"
-            className="px-1 py-.5 text-sm border rounded"
-          />
-          <div>
-            <button onClick={() => setpageLiveVisitors((p) => Math.max(p - 1, 1))} disabled={pageLiveVisitors === 1} className="px-1 py-.5 text-xs border rounded mr-1"> Prev </button>
-            <span className="text-xs">{pageLiveVisitors}</span>
-            <button onClick={() => setpageLiveVisitors((p) => p * itemsPerPage < liveVisitors.filter(visitor => visitor.name.toLowerCase().includes(searchLiveVisitors.toLowerCase()) || visitor.phone.includes(searchLiveVisitors)).length ? p + 1 : p)}
-              className="px-1 py-.5 text-xs border rounded ml-1">Next
-            </button>
+      {/* Employee Access Summary & Recent Visitor Log side by side */}
+      <div className="flex flex-col lg:flex-row gap-2 mb-6">
+        {/* Recent Visitor Log */}
+        <Card className="p-1 mb-4 flex-1 min-w-0 overflow-x-auto">
+          <h2 className="text-lg font-semibold mb-2 text-gray-800 text-center rounded-xl shadow">Recent Visitor Log</h2>
+          <div className="flex justify-between mb-2">
+            <input type="text" value={searchRecentVisitors} onChange={(e) => {
+              setsearchRecentVisitors(e.target.value);
+              setpageRecentVisitors(1);
+            }}
+              placeholder="Search recent visitors"
+              className="px-1 py-.5 text-xs border rounded w-2/3"
+            />
+            <div>
+              <button onClick={() => setpageRecentVisitors((p) => Math.max(p - 1, 1))} disabled={pageRecentVisitors === 1} className="px-1 py-.5 text-xs border rounded mr-1"> Prev </button>
+              <span className="text-xs">{pageRecentVisitors}</span>
+              <button onClick={() => setpageRecentVisitors((p) => p * itemsPerPage < recentVisitors.filter(v => v.name?.toLowerCase().includes(searchRecentVisitors.toLowerCase())).length ? p + 1 : p)}
+                className="px-1 py-.5 text-xs border rounded ml-1">Next
+              </button>
+            </div>
           </div>
-        </div>
 
-        <table >
-          <thead >
-            <tr>
-              <th>Name & Phone</th>
-              <th>To Meet</th>
-              <th>Time In/Out</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {liveVisitors.length > 0 ? (
-              liveVisitors
-                .filter(visitor => visitor.name.toLowerCase().includes(searchLiveVisitors.toLowerCase()) || visitor.phone.includes(searchLiveVisitors))
-                .slice((pageLiveVisitors - 1) * itemsPerPage, pageLiveVisitors * itemsPerPage)
-                .map((visitor) => (
-                  <tr key={visitor.id}>
-                    <td>
-                      <div className="flex items-center space-x-4">
-                        <img
-                          className="h-10 w-10 rounded-full object-cover"
-                          src={`${SERVER_PORT}/visitor-image/${visitor.id}`}
-                          alt={visitor.name}
-                          onError={(e) => {
-                            if (!e.target.src.includes('/default-avatar.png')) {
-                              e.target.onerror = null;
-                              e.target.src = '/default-avatar.png';
-                            }
-                          }}
-                        />
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">{visitor.name}</div>
-                          <div className="text-sm text-gray-500">{visitor.phone}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td >{visitor.tomeet}</td>
-                    <td>
-                      <div className="text-sm text-gray-900">
-                        In: {visitor.entrytime ? visitor.entrytime : 'N/A'}{" "}
-                        <CheckCircle className="w-4 h-4 mr-1 inline-flex items-center gap-1 text-sm text-green-600" />
-                      </div>
-                      {/* <div className={`text-sm ${visitor.expectedexittime ? 'text-gray-500' : 'text-gray-300'}`}>
-                        Out: {visitor.expectedexittime || 'N/A'}{" "}
-                        <XCircle
-                          className={`w-4 h-4 mr-1 inline-flex items-center gap-1 text-sm ${visitor.expectedexittime ? 'text-red-600' : 'text-gray-300'
-                            }`}
-                        />
-                      </div> */}
-                    </td>
-                    <td >
-                      {visitor.status === 'Accepted' ? (
-                        <button
-                          onClick={() => handleManualCheckout(visitor.id)}
-                          className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                        >
-                          <UserX className="w-4 h-4 mr-1" /> Checkout
-                        </button>
-                      ) : (
-                        <Badge status={visitor.status} />
-                      )}
-                    </td>
-                  </tr>
-                ))
-            ) : (
+          <table className="text-xs w-full">
+            <thead>
               <tr>
-                <td colSpan="5" >No visitors currently inside.</td>
+                <th className="px-1 py-1 text-left">Name</th>
+                <th className="px-1 py-1 text-left">In</th>
+                <th className="px-1 py-1 text-left">Out</th>
+                <th className="px-1 py-1 text-left">Status</th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </Card>
+            </thead>
+            <tbody>
+              {recentVisitors.length > 0 ? (
+                recentVisitors
+                  .filter(v => v.name?.toLowerCase().includes(searchRecentVisitors.toLowerCase()))
+                  .slice((pageRecentVisitors - 1) * itemsPerPage, pageRecentVisitors * itemsPerPage)
+                  .map((recentvisitor) => (
+                    <tr key={recentvisitor.id} className="border-b">
+                      <td className="px-1 py-1 truncate max-w-[80px]">{recentvisitor.name}</td>
+                      <td className="px-1 py-1">{recentvisitor.timein ? recentvisitor.timein : 'N/A'}</td>
+                      <td className="px-1 py-1">{recentvisitor.timeout ? recentvisitor.timeout : 'N/A'}</td>
+                      <td className="px-1 py-1"><Badge status={recentvisitor.status} /></td>
+                    </tr>
+                  ))
+              ) : (
+                <tr>
+                  <td className="px-1 py-2 text-center text-gray-500" colSpan="4">No recent visitor logs found.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </Card>
+
+        {/* Employee Access Summary */}
+        <Card className="p-1 mb-4 flex-1 min-w-0 overflow-x-auto">
+          <h2 className="text-lg font-semibold mb-2 text-gray-800 text-center rounded-xl shadow">Employee Access Summary</h2>
+          <div className="flex justify-between mb-2">
+            <input type="text" value={searchemployeeAccess} onChange={(e) => {
+              setsearchEmployeeAccess(e.target.value);
+              setpageEmployeeAccess(1);
+            }}
+              placeholder="Search employee access"
+              className="px-1 py-.5 text-xs border rounded w-2/3"
+            />
+            <div>
+              <button onClick={() => setpageEmployeeAccess((p) => Math.max(p - 1, 1))} disabled={pageemployeeAccess === 1} className="px-1 py-.5 text-xs border rounded mr-1"> Prev </button>
+              <span className="text-xs">{pageemployeeAccess}</span>
+              <button onClick={() => setpageEmployeeAccess((p) => p * itemsPerPage < employeeAccess.filter(v => v.name?.toLowerCase().includes(searchemployeeAccess.toLowerCase())).length ? p + 1 : p)}
+                className="px-1 py-.5 text-xs border rounded ml-1">Next
+              </button>
+            </div>
+          </div>
+
+          <table className="text-xs w-full">
+            <thead>
+              <tr>
+                <th className="px-1 py-1 text-left">Employee</th>
+                <th className="px-1 py-1 text-left">In</th>
+                <th className="px-1 py-1 text-left">Out</th>
+                <th className="px-1 py-1 text-left">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {employeeAccess.length > 0 ? (
+                employeeAccess
+                  .filter(v => v.name?.toLowerCase().includes(searchemployeeAccess.toLowerCase()))
+                  .slice((pageemployeeAccess - 1) * itemsPerPage, pageemployeeAccess * itemsPerPage)
+                  .map((employee) => (
+                    <tr key={employee.id} className="border-b">
+                      <td className="px-1 py-1 truncate max-w-[80px]">{employee.name}</td>
+                      <td className="px-1 py-1">{employee.entry ? employee.entry : 'N/A'}</td>
+                      <td className="px-1 py-1">{employee.exit ? employee.exit : 'N/A'}</td>
+                      <td className="px-1 py-1"><Badge status={employee.status} /></td>
+                    </tr>
+                  ))
+              ) : (
+                <tr>
+                  <td className="px-1 py-2 text-center text-gray-500" colSpan="4">No employee access records found.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </Card>
+      </div>
 
       {/* /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// */}
 
-      {/* 4. Recent Visitor Log */}
-      <h2 className="text-xl font-semibold mb-2 text-gray-800 text-center rounded-xl shadow">Recent Visitor Log</h2>
-      <Card className="p-1 mb-8">
-        <div className="flex justify-between mb-2">
-          <input type="text" value={searchRecentVisitors} onChange={(e) => {
-            setsearchRecentVisitors(e.target.value);
-            setpageRecentVisitors(1);
-          }}
-            placeholder="Search upcoming visitors"
-            className="px-1 py-.5 text-sm border rounded"
-          />
-          <div>
-            <button onClick={() => setpageRecentVisitors((p) => Math.max(p - 1, 1))} disabled={pageRecentVisitors === 1} className="px-1 py-.5 text-xs border rounded mr-1"> Prev </button>
-            <span className="text-xs">{pageRecentVisitors}</span>
-            <button onClick={() => setpageRecentVisitors((p) => p * itemsPerPage < recentVisitors.filter(v => v.name?.toLowerCase().includes(searchRecentVisitors.toLowerCase())).length ? p + 1 : p)}
-              className="px-1 py-.5 text-xs border rounded ml-1">Next
-            </button>
-          </div>
-        </div>
-
-        <table >
-          <thead>
-            <tr>
-              <th>Name & Contact</th>
-              <th>Time In/Out</th>
-              <th>To Meet</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {recentVisitors.length > 0 ? (
-              recentVisitors
-                .filter(v => v.name?.toLowerCase().includes(searchRecentVisitors.toLowerCase()))
-                .slice((pageRecentVisitors - 1) * itemsPerPage, pageRecentVisitors * itemsPerPage)
-                .map((recentvisitor, idx) => (
-                  <tr key={recentvisitor.id}>
-                    <td>
-                      <div className="flex items-center space-x-4">
-                        <img
-                          className="h-10 w-10 rounded-full object-cover"
-                          src={`${SERVER_PORT}/visitor-image/${recentvisitor.id}`}
-                          alt={recentvisitor.name}
-                          onError={(e) => {
-                            e.target.src = '/default-avatar.png';
-                          }}
-                        />
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">{recentvisitor.name}</div>
-                          <div className="text-sm text-gray-500">{recentvisitor.contact}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="text-sm text-gray-900">
-                        In: {recentvisitor.timein ? recentvisitor.timein : 'N/A'}{" "}
-                        <CheckCircle className="w-4 h-4 mr-1 inline-flex items-center gap-1 text-sm text-green-600" />
-                      </div>
-                      <div className={`text-sm ${recentvisitor.timeout ? 'text-gray-500' : 'text-gray-300'}`}>
-                        Out: {recentvisitor.timeout || 'N/A'}{" "}
-                        <XCircle
-                          className={`w-4 h-4 mr-1 inline-flex items-center gap-1 text-sm ${recentvisitor.timeout ? 'text-red-600' : 'text-gray-300'
-                            }`}
-                        />
-                      </div>
-                    </td>
-                    <td>{recentvisitor.host}</td>
-                    <td>
-                      <Badge status={recentvisitor.status} />
-                    </td>
-                  </tr>
-                ))
-            ) : (
-              <tr>
-                <td colSpan="5" className="px-6 py-4 text-center text-gray-500">No recent visitor logs.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </Card>
-
-      {/* /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// */}
-
-      {/* 5. Visitor Analytics */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      {/* 4. Visitor Analytics */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
         <Card className="p-1 mb-8">
           <h2 className="text-xl font-semibold mb-2 text-gray-800 text-center rounded-xl shadow">Visitor Analytics</h2>
           <h3 className="text-lg text-center font-medium text-gray-700 mb-4">Daily Visitor Volume</h3>
-          <ResponsiveContainer width="90%" height={350}>
-            <BarChart data={visitorTrends} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+          <ResponsiveContainer width="90%" height={150}>
+            <BarChart data={visitorTrends} margin={{ top: 40, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" />
               <YAxis />
@@ -1051,7 +1074,7 @@ export default function Cards({ setTitle }) {
         <Card className="p-1 mb-8">
           <h2 className="text-xl font-semibold mb-2 text-gray-800 text-center rounded-xl shadow">Peak Visiting Hours</h2>
           <h3 className="text-lg text-center font-medium text-gray-700 mb-4">Hourly Visitor Volume</h3>
-          <ResponsiveContainer width="90%" height={230}>
+          <ResponsiveContainer width="90%" height={130}>
             <BarChart data={peakHours} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="hour" />
@@ -1061,8 +1084,8 @@ export default function Cards({ setTitle }) {
             </BarChart>
           </ResponsiveContainer>
 
-          <h3 className="text-lg font-medium text-gray-750 ml-6 mt-6 mb-2">Department-wise Traffic (Top 3)</h3>
-          <ul className="list-disc list-inside text-gray-700">
+          <h3 className="text-lg font-small text-gray-750 ml-6 mb-2">Department-wise Traffic (Top 3)</h3>
+          <ul className="list-disc text-xs list-inside text-gray-700">
             <li>HR Department: 35%</li>
             <li>Sales Department: 25%</li>
             <li>Logistics Department: 15%</li>
@@ -1075,31 +1098,32 @@ export default function Cards({ setTitle }) {
 
       {/* 6. Frequent Visitors */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <Card className="p-1 mb-8">
+        <Card className="p-1 mb-4 text-xs overflow-x-auto">
           <h2 className="text-xl font-semibold mb-2 text-gray-800 text-center rounded-xl shadow">Frequent Visitors</h2>
           <div className="flex justify-between mb-2">
             <input type="text" value={searchfrequentVisitors} onChange={(e) => {
               setsearchFrequentVisitors(e.target.value);
               setpageFrequentVisitors(1);
             }}
-              placeholder="Search upcoming visitors"
-              className="px-1 py-.5 text-sm border rounded"
+              placeholder="Search frequent visitors"
+              className="px-1 py-1 text-xs border rounded w-2/3"
             />
             <div>
-              <button onClick={() => setpageFrequentVisitors((p) => Math.max(p - 1, 1))} disabled={pagefrequentVisitors === 1} className="px-1 py-.5 text-xs border rounded mr-1"> Prev </button>
+              <button onClick={() => setpageFrequentVisitors((p) => Math.max(p - 1, 1))} disabled={pagefrequentVisitors === 1} className="px-1 py-1 text-xs border rounded mr-1"> Prev </button>
               <span className="text-xs">{pagefrequentVisitors}</span>
               <button onClick={() => setpageFrequentVisitors((p) => p * itemsPerPage < frequentVisitors.filter(v => v.name?.toLowerCase().includes(searchfrequentVisitors.toLowerCase())).length ? p + 1 : p)}
-                className="px-1 py-.5 text-xs border rounded ml-1">Next
+                className="px-1 py-1 text-xs border rounded ml-1">Next
               </button>
             </div>
           </div>
-          <table>
+          <table className="text-xs w-full">
             <thead>
               <tr>
-                <th>Name & Org</th>
-                <th>Total Visits</th>
-                <th>Last Visit</th>
-                <th>Actions</th>
+                <th className="px-1 py-1 text-left">Name</th>
+                <th className="px-1 py-1 text-left">Org</th>
+                <th className="px-1 py-1 text-left">Visits</th>
+                <th className="px-1 py-1 text-left">Last</th>
+                <th className="px-1 py-1 text-left">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1108,26 +1132,24 @@ export default function Cards({ setTitle }) {
                   .filter(v => v.name?.toLowerCase().includes(searchfrequentVisitors.toLowerCase()))
                   .slice((pagefrequentVisitors - 1) * itemsPerPage, pagefrequentVisitors * itemsPerPage)
                   .map((visitor, idx) => (
-                    <tr key={visitor.id}>
-                      <td>
-                        <div className="text-sm font-medium text-gray-900">{visitor.name}</div>
-                        <div className="text-sm text-gray-500">{visitor.organization}</div>
-                      </td>
-                      <td>{visitor.totalVisits}</td>
-                      <td>{visitor.lastVisit}</td>
-                      <td>
-                        <div className="space-x-2">
+                    <tr key={visitor.id} className="border-b">
+                      <td className="px-1 py-1 text-xs text-gray-800 truncate max-w-[80px]">{visitor.name}</td>
+                      <td className="px-1 py-1 text-xs truncate max-w-[80px]">{visitor.organization}</td>
+                      <td className="px-1 py-1 text-xs">{visitor.totalVisits}</td>
+                      <td className="px-1 py-1 text-xs">{visitor.lastVisit}</td>
+                      <td className="px-1 py-1 text-xs">
+                        <div className="space-x-1">
                           <button
                             onClick={() => handleFlagVisitor(visitor.id, true)}
-                            className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm ${visitor.isVIP ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-yellow-300'}`}
+                            className={`inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md shadow-sm ${visitor.isVIP ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-yellow-300'}`}
                           >
-                            <Award className="w-4 h-4 mr-1" /> VIP
+                            <Award className="w-3 h-3 mr-1" /> VIP
                           </button>
                           <button
                             onClick={() => handleFlagVisitor(visitor.id, false)}
-                            className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm ${visitor.isSuspicious ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-red-300'}`}
+                            className={`inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md shadow-sm ${visitor.isSuspicious ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-red-300'}`}
                           >
-                            <ShieldAlert className="w-4 h-4 mr-1" /> Suspicious
+                            <ShieldAlert className="w-3 h-3 mr-1" /> Suspicious
                           </button>
                         </div>
                       </td>
@@ -1135,69 +1157,80 @@ export default function Cards({ setTitle }) {
                   ))
               ) : (
                 <tr>
-                  <td>No frequent visitors.</td>
+                  <td className="px-1 py-2 text-center text-gray-500" colSpan="5">No frequent visitors found.</td>
                 </tr>
               )}
             </tbody>
           </table>
         </Card>
 
-        {/* 7. Employee Access Summary */}
-        <Card className="p-1 mb-8">
-          <h2 className="text-xl font-semibold mb-2 text-gray-800 text-center rounded-xl shadow">Employee Access Summary</h2>
-
+        {/* 8. Security Alerts / Watchlist */}
+        <Card className="p-1 mb-4 text-xs overflow-x-auto">
+          <h2 className="text-xl font-semibold mb-2 text-gray-800 text-center rounded-xl shadow">Security Alerts / Watchlist</h2>
           <div className="flex justify-between mb-2">
-            <input type="text" value={searchemployeeAccess} onChange={(e) => {
-              setsearchEmployeeAccess(e.target.value);
-              setpageEmployeeAccess(1);
+            <input type="text" value={searchsecurityAlerts} onChange={(e) => {
+              setsearchSecurityAlerts(e.target.value);
+              setpageSecurityAlerts(1);
             }}
-              placeholder="Search upcoming visitors"
-              className="px-1 py-.5 text-sm border rounded"
+              placeholder="Search alerts"
+              className="px-1 py-1 text-xs border rounded w-2/3"
             />
             <div>
-              <button onClick={() => setpageEmployeeAccess((p) => Math.max(p - 1, 1))} disabled={pageemployeeAccess === 1} className="px-1 py-.5 text-xs border rounded mr-1"> Prev </button>
-              <span className="text-xs">{pageemployeeAccess}</span>
-              <button onClick={() => setpageEmployeeAccess((p) => p * itemsPerPage < employeeAccess.filter(v => v.name?.toLowerCase().includes(searchemployeeAccess.toLowerCase())).length ? p + 1 : p)}
-                className="px-1 py-.5 text-xs border rounded ml-1">Next
+              <button onClick={() => setsearchSecurityAlerts((p) => Math.max(p - 1, 1))} disabled={pageSecurityAlerts === 1} className="px-1 py-1 text-xs border rounded mr-1"> Prev </button>
+              <span className="text-xs">{pageSecurityAlerts}</span>
+              <button onClick={() => setsearchSecurityAlerts((p) => p * itemsPerPage < securityAlerts.filter(v => v.visitor?.toLowerCase().includes(searchsecurityAlerts.toLowerCase())).length ? p + 1 : p)}
+                className="px-1 py-1 text-xs border rounded ml-1">Next
               </button>
             </div>
           </div>
-
-          <table>
+          <table className="text-xs w-full">
             <thead>
               <tr>
-                <th>Employee</th>
-                <th>Time In/Out</th>
-                <th>Status</th>
+                <th className="px-1 py-1 text-left">Alert</th>
+                <th className="px-1 py-1 text-left">Timestamp</th>
+                <th className="px-1 py-1 text-left">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {employeeAccess.length > 0 ? (
-                employeeAccess
-                  .filter(v => v.name?.toLowerCase().includes(searchemployeeAccess.toLowerCase()))
-                  .slice((pageemployeeAccess - 1) * itemsPerPage, pageemployeeAccess * itemsPerPage)
-                  .map((employee, idx) => (
-                    <tr key={employee.id}>
-                      <td>{employee.name}</td>
-                      <td>
-                        <div className="text-sm text-gray-900">
-                          In: {employee.entry ? employee.entry : 'N/A'}{" "}
-                          <CheckCircle className="w-4 h-4 mr-1 inline-flex items-center gap-1 text-sm text-green-600" />
-                        </div>
-                        <div className={`text-sm ${employee.exit ? 'text-gray-500' : 'text-gray-300'}`}>
-                          Out: {employee.exit || 'N/A'}{" "}
-                          <XCircle className={`w-4 h-4 mr-1 inline-flex items-center gap-1 text-sm ${employee.exit ? 'text-red-600' : 'text-gray-300'}`} />
-                        </div>
+              {securityAlerts.length > 0 ? (
+                securityAlerts
+                  .filter(v => v.visitor?.toLowerCase().includes(searchsecurityAlerts.toLowerCase()))
+                  .slice((pageSecurityAlerts - 1) * itemsPerPage, pageSecurityAlerts * itemsPerPage)
+                  .map((alert, idx) => (
+                    <tr key={alert.id} className="bg-red-50 border-b">
+                      <td className="px-1 py-1 max-w-[365px] align-top">
+                        <div className="text-xs font-medium text-red-900 whitespace-normal break-words min-w-[220px]">{alert.type}: {alert.visitor}</div>
+                        <div className="text-xs text-red-700 whitespace-normal break-words max-w-[300px]">{alert.notes}</div>
                       </td>
 
-                      <td>
-                        <Badge status={employee.status} />
+                      <td className="text-xs px-1 py-1 w-[38px] truncate text-center">{alert.timestamp}</td>
+                      <td className="px-1 py-1">
+                        <div className="flex flex-col gap-1">
+                          <button
+                            onClick={() => handleSecurityAlertAction(alert.id, 'View')}
+                            className="inline-flex items-center px-2 py-1 border border-transparent text-xs rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 w-full justify-center"
+                          >
+                            View
+                          </button>
+                          <button
+                            onClick={() => handleSecurityAlertAction(alert.id, 'Clear')}
+                            className="inline-flex items-center px-2 py-1 border border-transparent text-xs rounded-md shadow-sm text-white bg-gray-600 hover:bg-gray-700 w-full justify-center"
+                          >
+                            Clear
+                          </button>
+                          <button
+                            onClick={() => handleSecurityAlertAction(alert.id, 'Alert Security')}
+                            className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-orange-600 hover:bg-orange-700 w-full justify-center"
+                          >
+                            <Bell className="w-3 h-3 mr-1" /> Alert
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
               ) : (
                 <tr>
-                  <td>No employee access data.</td>
+                  <td className="px-1 py-2 text-center text-gray-500" colSpan="3">No active security alerts.</td>
                 </tr>
               )}
             </tbody>
@@ -1207,79 +1240,6 @@ export default function Cards({ setTitle }) {
 
       {/* /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// */}
 
-      {/* 8. Security Alerts / Watchlist */}
-      <Card className="p-1 mb-8">
-        <h2 className="text-xl font-semibold mb-2 text-gray-800 text-center rounded-xl shadow">Security Alerts / Watchlist</h2>
-
-        <div className="flex justify-between mb-2">
-          <input type="text" value={searchsecurityAlerts} onChange={(e) => {
-            setsearchSecurityAlerts(e.target.value);
-            setpageSecurityAlerts(1);
-          }}
-            placeholder="Search upcoming visitors"
-            className="px-1 py-.5 text-sm border rounded"
-          />
-          <div>
-            <button onClick={() => setsearchSecurityAlerts((p) => Math.max(p - 1, 1))} disabled={pageSecurityAlerts === 1} className="px-1 py-.5 text-xs border rounded mr-1"> Prev </button>
-            <span className="text-xs">{pageSecurityAlerts}</span>
-            <button onClick={() => setsearchSecurityAlerts((p) => p * itemsPerPage < securityAlerts.filter(v => v.visitor?.toLowerCase().includes(searchsecurityAlerts.toLowerCase())).length ? p + 1 : p)}
-              className="px-1 py-.5 text-xs border rounded ml-1">Next
-            </button>
-          </div>
-        </div>
-
-        <table>
-          <thead>
-            <tr>
-              <th>Alert</th>
-              <th>Timestamp</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {securityAlerts.length > 0 ? (
-              securityAlerts
-                .filter(v => v.visitor?.toLowerCase().includes(searchsecurityAlerts.toLowerCase()))
-                .slice((pageSecurityAlerts - 1) * itemsPerPage, pageSecurityAlerts * itemsPerPage)
-                .map((alert, idx) => (
-                  <tr key={alert.id} className="bg-red-50">
-                    <td>
-                      <div className="text-sm font-medium text-red-900">{alert.type}: {alert.visitor}</div>
-                      <div className="text-sm text-red-700">{alert.notes}</div>
-                    </td>
-                    <td>{alert.timestamp}</td>
-                    <td>
-                      <div className="space-x-2">
-                        <button
-                          onClick={() => handleSecurityAlertAction(alert.id, 'View')}
-                          className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
-                        >
-                          View
-                        </button>
-                        <button
-                          onClick={() => handleSecurityAlertAction(alert.id, 'Clear')}
-                          className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-gray-600 hover:bg-gray-700"
-                        >
-                          Clear
-                        </button>
-                        <button
-                          onClick={() => handleSecurityAlertAction(alert.id, 'Alert Security')}
-                          className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-orange-600 hover:bg-orange-700"
-                        >
-                          <Bell className="w-4 h-4 mr-1" /> Alert Security
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-            ) : (
-              <tr>
-                <td>No active security alerts.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </Card>
 
       {/* /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// */}
 
@@ -1341,7 +1301,7 @@ export default function Cards({ setTitle }) {
                     <div className="text-sm font-medium text-gray-900">{material.purpose}</div>
                     <div className="text-sm text-gray-500">Carrier: {material.carrier}</div>
                   </td>
-                  <td>
+                  <td className="text-white-800">
                     <Badge status={material.status} />
                   </td>
                   <td>{material.remarks}</td>
@@ -1418,7 +1378,7 @@ export default function Cards({ setTitle }) {
                     </div>
                   </td>
                   <td>
-                    <Badge status={vehicle.securityCheck} />
+                    <Badge status={vehicle.securitycheck} />
                   </td>
                 </tr>
               ))}
