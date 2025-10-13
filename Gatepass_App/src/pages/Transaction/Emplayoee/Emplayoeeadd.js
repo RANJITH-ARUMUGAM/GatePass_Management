@@ -6,7 +6,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
-import { SERVER_PORT } from '../../../constant'; 
+import { SERVER_PORT } from '../../../constant';
 
 
 const EmployeeAdd = ({ setTitle }) => {
@@ -336,6 +336,7 @@ const EmployeeAdd = ({ setTitle }) => {
               name="password"
               value={form.password}
               onChange={handleChange}
+              autoComplete="new-password"
               required
             />
           </Col>
@@ -346,6 +347,7 @@ const EmployeeAdd = ({ setTitle }) => {
               name="confirm_password"
               value={form.confirm_password}
               onChange={handleChange}
+              autoComplete="new-password"
               required
             />
           </Col>

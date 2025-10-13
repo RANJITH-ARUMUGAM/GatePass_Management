@@ -425,106 +425,104 @@ const AddGateEntry = ({ setTitle }) => {
     if (formRef.current) formRef.current.reset();
   };
 
-
-// Unified function to send OTP for either email or SMS
-const sendOTP = async () => {
-  setIsOtpSending(true);
-  setOtpError('');
-  let contactInfo = '';
-  let contactType = '';
-
-  if (verificationMethod === 'email') {
-    contactInfo = email;
-    contactType = 'email';
-  } else if (verificationMethod === 'sms') {
-    contactInfo = visitor.GMS_MobileNo;
-    contactType = 'phone';
-  }
-
-  try {
-    await axios.post(`${SERVER_PORT}/sendOTP`, {
-      contact_info: contactInfo,
-      contact_type: contactType
-    });
-    // Set state based on the type of contact
-    if (contactType === 'email') {
+  // Email OTP functions
+  const sendEmailOTP = async () => {
+    setIsOtpSending(true);
+    setOtpError('');
+    try {
+      await axios.post(`${SERVER_PORT}/sendVisitorOTP`, { email });
       setOtpSent(true);
       setCountdown(60); // 60 seconds timer
-    } else if (contactType === 'phone') {
-      setIsMobileOtpSent(true);
-      setCountdown(60);
-      setMobileOtp(['', '', '', '', '', '']); // Reset mobile OTP input fields
+    } catch (err) {
+      setOtpError('Failed to send OTP. Please try again.');
+    } finally {
+      setIsOtpSending(false);
     }
-  } catch (err) {
-    setOtpError('Failed to send OTP. Please try again.');
-  } finally {
-    setIsOtpSending(false);
-  }
-};
+  };
 
-// Unified function to verify OTP for either email or SMS
-const verifyOTP = async () => {
-  setIsOtpVerifying(true);
-  setOtpError('');
-  let contactInfo = '';
-  let contactType = '';
-  let otpValue = '';
-
-  if (verificationMethod === 'email') {
-    contactInfo = email;
-    contactType = 'email';
-    otpValue = enteredOTP;
-  } else if (verificationMethod === 'sms') {
-    contactInfo = visitor.GMS_MobileNo;
-    contactType = 'phone';
-    otpValue = mobileOtp.join('');
-  }
-  
-  try {
-    const res = await axios.post(`${SERVER_PORT}/verifyOTP`, {
-      contact_info: contactInfo,
-      contact_type: contactType,
-      otp: otpValue
-    });
-    if (res.data.success) {
-      setOtpVerified(true);
-      // Set state based on the type of contact
-      if (contactType === 'email') {
+  const verifyEmailOTP = async () => {
+    setIsOtpVerifying(true);
+    setOtpError('');
+    try {
+      const res = await axios.post(`${SERVER_PORT}/verifyVisitorOTP`, {
+        email,
+        otp: enteredOTP
+      });
+      if (res.data.success) {
+        setOtpVerified(true);
         setOtpError('');
-      } else if (contactType === 'phone') {
-        setIsMobileOtpVerified(true);
-        setOtpError('');
+      } else {
+        setOtpError(res.data.message || 'Invalid OTP. Please try again.');
       }
-    } else {
-      setOtpError(res.data.message || 'Invalid OTP. Please try again.');
+    } catch (err) {
+      console.error('Error verifying OTP:', err);
+      setOtpError('OTP verification failed.');
+    } finally {
+      setIsOtpVerifying(false);
     }
-  } catch (err) {
-    console.error('Error verifying OTP:', err);
-    setOtpError('OTP verification failed.');
-  } finally {
-    setIsOtpVerifying(false);
-  }
-};
+  };
 
-// Unified resend function
-const resendOTP = () => {
-  if (countdown === 0) {
-    sendOTP();
-  }
-};
+  const resendEmailOTP = () => {
+    if (countdown === 0) {
+      sendEmailOTP();
+    }
+  };
 
-// Unified back function
-const handleBack = () => {
-  if (verificationMethod === 'email') {
+  const handleBackToEmail = () => {
     setOtpSent(false);
     setEnteredOTP('');
-  } else if (verificationMethod === 'sms') {
+    setCountdown(0);
+    setOtpError('');
+  };
+
+  // Mobile OTP functions
+  const sendMobileOtp = async () => {
+    setIsOtpSending(true);
+    setOtpError('');
+    try {
+      await axios.post(`${SERVER_PORT}/sendVisitorSmsOTP`, { mobile: visitor.GMS_MobileNo });
+      setIsMobileOtpSent(true);
+      setCountdown(60);
+      setMobileOtp(['', '', '', '', '', '']);
+    } catch (err) {
+      setOtpError('Failed to send OTP.');
+    } finally {
+      setIsOtpSending(false);
+    }
+  };
+
+  const verifyMobileOtp = async () => {
+    setIsOtpVerifying(true);
+    setOtpError('');
+    try {
+      const otpValue = mobileOtp.join('');
+      const res = await axios.post(`${SERVER_PORT}/verifyVisitorSmsOTP`, { mobile: visitor.GMS_MobileNo, otp: otpValue });
+      if (res.data.success) {
+        setOtpVerified(true);
+        setIsMobileOtpVerified(true);
+        setOtpError('');
+      } else {
+        setOtpError(res.data.message || 'Invalid OTP. Please try again.');
+      }
+    } catch (err) {
+      setOtpError('OTP verification failed.');
+    } finally {
+      setIsOtpVerifying(false);
+    }
+  };
+
+  const resendMobileOtp = () => {
+    if (countdown === 0) {
+      sendMobileOtp();
+    }
+  };
+
+  const handleBackToMobile = () => {
     setIsMobileOtpSent(false);
     setMobileOtp(['', '', '', '', '', '']);
-  }
-  setCountdown(0);
-  setOtpError('');
-};
+    setCountdown(0);
+    setOtpError('');
+  };
 
   // OTP input handlers
   const handleMobileOtpChange = (index, value) => {
@@ -672,7 +670,7 @@ const handleBack = () => {
                           />
                           <Button
                             variant={isMobileOtpVerified ? "success" : "outline-primary"}
-                            onClick={sendOTP}
+                            onClick={sendMobileOtp}
                             disabled={isOtpSending || isMobileOtpVerified || !visitor.GMS_MobileNo.trim()}
                             style={{ fontSize: '0.75rem' }}
                           >
@@ -962,7 +960,7 @@ const handleBack = () => {
                 </div>
               </div>
               <button
-                onClick={sendOTP}
+                onClick={sendEmailOTP}
                 disabled={isOtpSending || !email}
                 className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-2 px-6 rounded-xl font-medium hover:from-blue-600 hover:to-purple-700 focus:ring-4 focus:ring-blue-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
@@ -1008,7 +1006,7 @@ const handleBack = () => {
               <div className="text-center mb-6">
                 <p className="text-sm text-gray-600 mb-2">Didn't receive the code?</p>
                 <button
-                  onClick={resendOTP}
+                  onClick={resendEmailOTP}
                   disabled={countdown > 0}
                   className="text-blue-600 hover:text-blue-700 font-medium text-sm disabled:text-gray-400 disabled:cursor-not-allowed"
                 >
@@ -1016,7 +1014,7 @@ const handleBack = () => {
                 </button>
               </div>
               <button
-                onClick={verifyOTP}
+                onClick={verifyEmailOTP}
                 disabled={isOtpVerifying || enteredOTP.length !== 6}
                 className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-4 px-6 rounded-xl font-medium hover:from-green-600 hover:to-emerald-700 focus:ring-4 focus:ring-green-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
@@ -1033,7 +1031,7 @@ const handleBack = () => {
                 )}
               </button>
               <button
-                onClick={handleBack}
+                onClick={handleBackToEmail}
                 className="w-full mt-3 text-gray-600 hover:text-gray-800 py-2 font-medium transition-colors duration-200"
               >
                 ← Back to input
@@ -1062,7 +1060,7 @@ const handleBack = () => {
                 </div>
               </div>
               <button
-                onClick={sendOTP}
+                onClick={sendMobileOtp}
                 disabled={isOtpSending || !visitor.GMS_MobileNo.trim() || visitor.GMS_MobileNo.length < 10}
                 className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-2 px-6 rounded-xl font-medium hover:from-blue-600 hover:to-purple-700 focus:ring-4 focus:ring-blue-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
@@ -1109,7 +1107,7 @@ const handleBack = () => {
               <div className="text-center mb-6">
                 <p className="text-sm text-gray-600 mb-2">Didn't receive the code?</p>
                 <button
-                  onClick={resendOTP}
+                  onClick={resendMobileOtp}
                   disabled={countdown > 0}
                   className="text-blue-600 hover:text-blue-700 font-medium text-sm disabled:text-gray-400 disabled:cursor-not-allowed"
                 >
@@ -1117,7 +1115,7 @@ const handleBack = () => {
                 </button>
               </div>
               <button
-                onClick={verifyOTP}
+                onClick={verifyMobileOtp}
                 disabled={isOtpVerifying || mobileOtp.join('').length !== 6}
                 className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-4 px-6 rounded-xl font-medium hover:from-green-600 hover:to-emerald-700 focus:ring-4 focus:ring-green-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
@@ -1134,7 +1132,7 @@ const handleBack = () => {
                 )}
               </button>
               <button
-                onClick={handleBack}
+                onClick={handleBackToMobile}
                 className="w-full mt-3 text-gray-600 hover:text-gray-800 py-2 font-medium transition-colors duration-200"
               >
                 ← Back to input

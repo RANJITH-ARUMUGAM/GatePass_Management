@@ -9,18 +9,27 @@ import './Topnavbar.css';
 import { Fingerprint } from 'lucide-react';
 import { AnimatePresence } from "framer-motion";
 import { Image } from 'react-bootstrap';
-import profilePic from '../profile.png';
 import { SERVER_PORT } from '../../../constant';
+import localprofilePic from '../profile.png';
 
 
+function bufferToBase64(buffer) {
+  if (!buffer) return '';
+  if (typeof buffer === 'string') return buffer;
+  if (buffer.data) {
+    return btoa(
+      new Uint8Array(buffer.data).reduce((data, byte) => data + String.fromCharCode(byte), '')
+    );
+  }
+  return '';
+}
 
 export default function Topnavbar({ isSidenavOpen }) {
   const [loginTime] = useState(new Date().toLocaleTimeString());
-  const [logoutTime, setLogoutTime] = useState(null);
   const [alerts, setAlerts] = useState([]);
   const profileDropdownRef = useRef(null);
   const navigate = useNavigate();
-  const [isPunchedIn, setIsPunchedIn] = useState(true);
+  const [isPunchedIn, setIsPunchedIn] = useState(false);
   const [isNotificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
   const [isProfileDrawerOpen, setProfileDrawerOpen] = useState(false);
   const [drawerContentOpen, setDrawerContentOpen] = useState(false);
@@ -30,6 +39,7 @@ export default function Topnavbar({ isSidenavOpen }) {
   const username = ReactSession.get('username');
   const name = sessionStorage.getItem('name');
   const userId = sessionStorage.getItem('userId');
+
 
   useEffect(() => {
     if (username) {
@@ -47,41 +57,26 @@ export default function Topnavbar({ isSidenavOpen }) {
 
   useEffect(() => {
     const checkAttendanceStatus = async () => {
-      const userId = sessionStorage.getItem('userId');
       if (!userId) {
-        console.log("⚠️ No userId found in session");
         return;
       }
 
       try {
-        console.log("🔍 Checking attendance status for userId:", userId);
         const response = await axios.get(`${SERVER_PORT}/AttendanceStatus/${userId}`);
-        console.log("📊 Attendance status response:", response.data);
-
-        const { isPunchedIn: serverPunchedIn, isPunchedOut: serverPunchedOut, status } = response.data;
-
-        // User is considered "punched in" if they have punched in but not completed their day
+        const { isPunchedIn: serverPunchedIn, isPunchedOut: serverPunchedOut } = response.data;
         const currentlyPunchedIn = serverPunchedIn && !serverPunchedOut;
         setIsPunchedIn(currentlyPunchedIn);
-
-        console.log("🎯 Setting isPunchedIn to:", currentlyPunchedIn);
-
       } catch (err) {
-        console.error("❌ Error checking attendance status:", err);
-        // Default to not punched in on error
+        console.error("Error checking attendance status:", err);
         setIsPunchedIn(false);
       }
     };
-
     checkAttendanceStatus();
-  }, []);
-
-
+  }, [userId]);
 
 
   // Alert system
   const showAlert = (type, title, message, onConfirm) => {
-    console.log(`⚠️ Showing alert - Type: ${type}, Title: ${title}`);
     const newAlert = { id: Date.now(), type, title, message, onConfirm };
     setAlerts(prev => [...prev, newAlert]);
 
@@ -94,41 +89,27 @@ export default function Topnavbar({ isSidenavOpen }) {
 
   // Logout
   const handleLogout = () => {
-    console.log("🚪 Logout initiated");
     showAlert("info", "Information", "Are you sure you want to Logout?", (isConfirmed) => {
       if (isConfirmed) {
-        console.log("✅ Logout confirmed");
-        window.location.reload();
         sessionStorage.clear();
         navigate("/");
-      } else {
-        console.log("❌ Logout canceled");
       }
     });
   };
 
   // Navigate to Edit Profile
   const handleeditprofile = () => {
-    console.log("✏️ Navigating to edit profile");
     navigate('/editprofile');
   };
 
   // Navigate to Change Password
   const handlepassword = () => {
-    console.log("🔒 Navigating to change password");
     navigate('/changePassword');
   };
 
   // Fixed Punch In/Out toggle function for Topnavbar component
   const handlePunchToggle = async () => {
     try {
-      // Get session data
-      const userId = sessionStorage.getItem('userId');
-      const username = ReactSession.get('username') || sessionStorage.getItem('username');
-
-      console.log("🔄 Punch toggle initiated", { userId, username, isPunchedIn });
-
-      // Validate session
       if (!userId || !username) {
         showAlert(
           "error",
@@ -138,61 +119,34 @@ export default function Topnavbar({ isSidenavOpen }) {
         return;
       }
 
-      // Show loading state (optional)
-      // setIsPunchLoading(true);
-
-      // Perform punch operation with consistent userId parameter
       if (!isPunchedIn) {
-        console.log("📥 Performing punch-in...");
-        const response = await axios.post(`${SERVER_PORT}/AttendancePunchIn`, {
-          userId: parseInt(userId) // Ensure it's a number
+        await axios.post(`${SERVER_PORT}/AttendancePunchIn`, {
+          userId: parseInt(userId)
         });
-
-        console.log("✅ Punch-in successful:", response.data);
         showAlert("success", "Success", "You have successfully punched in!");
-
-        // Update state immediately for better UX
         setIsPunchedIn(true);
-
-        // Navigate after successful punch-in
         navigate('/attendanceadmin');
 
       } else {
-        console.log("📤 Performing punch-out...");
-        const response = await axios.post(`${SERVER_PORT}/AttendancePunchOut`, {
-          userId: parseInt(userId) // Changed from loginid to userId and ensure it's a number
+        await axios.post(`${SERVER_PORT}/AttendancePunchOut`, {
+          userId: parseInt(userId)
         });
-
-        console.log("✅ Punch-out successful:", response.data);
         showAlert("success", "Success", "You have successfully punched out!");
-
-        // Update state immediately for better UX
         setIsPunchedIn(false);
-
-        // Navigate after successful punch-out
         navigate('/home');
       }
 
-      // Verify status with server after a short delay to ensure DB is updated
       setTimeout(async () => {
         try {
           const statusRes = await axios.get(`${SERVER_PORT}/AttendanceStatus/${userId}`);
-          console.log("🔍 Status verification:", statusRes.data);
-
-          // Update state based on server response
           const serverIsPunchedIn = statusRes.data.isPunchedIn && !statusRes.data.isPunchedOut;
           setIsPunchedIn(serverIsPunchedIn);
-
         } catch (verifyErr) {
-          console.error("⚠️ Status verification failed:", verifyErr);
-          // Don't show error to user as the main operation succeeded
+          console.error("Status verification failed:", verifyErr);
         }
       }, 1000);
 
     } catch (err) {
-      console.error("❌ Punch operation failed:", err);
-
-      // Determine specific error message
       let errorMessage = "Failed to complete punch operation. Please try again.";
 
       if (err.response?.status === 404) {
@@ -205,7 +159,6 @@ export default function Topnavbar({ isSidenavOpen }) {
 
       showAlert("error", "Operation Failed", errorMessage);
 
-      // Refresh status from server in case of error
       try {
         const statusRes = await axios.get(`${SERVER_PORT}/AttendanceStatus/${userId}`);
         const serverIsPunchedIn = statusRes.data.isPunchedIn && !statusRes.data.isPunchedOut;
@@ -213,10 +166,6 @@ export default function Topnavbar({ isSidenavOpen }) {
       } catch (statusErr) {
         console.error("Failed to refresh status after error:", statusErr);
       }
-
-    } finally {
-      // Hide loading state (optional)
-      // setIsPunchLoading(false);
     }
   };
 
@@ -228,7 +177,22 @@ export default function Topnavbar({ isSidenavOpen }) {
     }
   }, [isProfileDrawerOpen, isNotificationDrawerOpen]);
 
+  const handleImageError = (e) => {
+    e.target.src = localprofilePic;
+  };
 
+
+  
+  const getProfileImageSrc = () => {
+    if (userData && userData.adm_users_profileimage && userData.adm_users_profileimage.data) {
+      return `data:image/jpeg;base64,${bufferToBase64(userData.adm_users_profileimage)}`;
+    }
+    const profileImageFromSession = ReactSession.get('profileimage');
+    if (profileImageFromSession && typeof profileImageFromSession === 'string' && profileImageFromSession.startsWith('data:image')) {
+      return profileImageFromSession;
+    }
+    return localprofilePic;
+  };
 
   return (
     <nav className={`top-navbar ${isSidenavOpen ? 'shift-right-unique' : ''}`}>
@@ -237,47 +201,43 @@ export default function Topnavbar({ isSidenavOpen }) {
 
         <div className="user-info">
           <button
-  onClick={handlePunchToggle}
-  className={`p-1 py-1 bg-gray-900 text-white rounded-full shadow-lg transition-all duration-300 flex items-center justify-center relative overflow-hidden group hover:shadow-xl hover:scale-105 ${isPunchedIn ? 'hover:bg-red-700' : 'hover:bg-green-700'}`}
-  style={{ position: 'relative', width: 42, height: 42 }}
-  aria-label={isPunchedIn ? 'Punch Out' : 'Punch In'}
->
-  {/* Circular hover effect */}
-  <span
-    className={`absolute left-1 top-1 w-10 h-10 rounded-full transition-all duration-300 opacity-0 group-hover:opacity-100 ${isPunchedIn ? 'bg-red-600' : 'bg-green-600'}`}
-    style={{ zIndex: 0 }}
-  ></span>
-  
-  {/* Icon container */}
-  <span 
-    style={{ 
-      zIndex: 1, 
-      position: 'relative', 
-      display: 'flex', 
-      alignItems: 'center', 
-      justifyContent: 'center', 
-      width: '100%', 
-      height: '100%',
-      transition: 'all 0.3s ease'
-    }}
-    className="group-hover:scale-110"
-  >
-    <Fingerprint 
-      size={30} 
-      color={isPunchedIn ? '#dc2626' : '#16a34a'} 
-      className="transition-all duration-300 group-hover:drop-shadow-lg"
-    />
-  </span>
-  
-  {/* Optional: Add text labels that appear on hover */}
-  <span 
-    className={`absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-xs font-medium px-2 py-1 rounded transition-all duration-300 opacity-0 group-hover:opacity-100 whitespace-nowrap ${isPunchedIn ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}
-  >
-    {isPunchedIn ? 'Punch Out' : 'Punch In'}
-  </span>
-</button>
+            onClick={handlePunchToggle}
+            className={`p-1 py-1 bg-gray-900 text-white rounded-full shadow-lg transition-all duration-300 flex items-center justify-center relative overflow-hidden group hover:shadow-xl hover:scale-105 ${isPunchedIn ? 'hover:bg-red-700' : 'hover:bg-green-700'}`}
+            style={{ position: 'relative', width: 42, height: 42 }}
+            aria-label={isPunchedIn ? 'Punch Out' : 'Punch In'}
+          >
+            <span
+              className={`absolute left-1 top-1 w-10 h-10 rounded-full transition-all duration-300 opacity-0 group-hover:opacity-100 ${isPunchedIn ? 'bg-red-600' : 'bg-green-600'}`}
+              style={{ zIndex: 0 }}
+            ></span>
 
-          {/* Notifications Drawer Trigger */}
+            <span
+              style={{
+                zIndex: 1,
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '100%',
+                height: '100%',
+                transition: 'all 0.3s ease'
+              }}
+              className="group-hover:scale-110"
+            >
+              <Fingerprint
+                size={30}
+                color={isPunchedIn ? '#dc2626' : '#16a34a'}
+                className="transition-all duration-300 group-hover:drop-shadow-lg"
+              />
+            </span>
+
+            <span
+              className={`absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-xs font-medium px-2 py-1 rounded transition-all duration-300 opacity-0 group-hover:opacity-100 whitespace-nowrap ${isPunchedIn ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}
+            >
+              {isPunchedIn ? 'Punch Out' : 'Punch In'}
+            </span>
+          </button>
+
           <div className="notification-container">
             <button
               className="notification-icon"
@@ -288,7 +248,6 @@ export default function Topnavbar({ isSidenavOpen }) {
             </button>
           </div>
 
-          {/* Profile Drawer Trigger */}
           <div className="dropdown-container" ref={profileDropdownRef}>
             <div className="profile-container">
               <button
@@ -296,10 +255,11 @@ export default function Topnavbar({ isSidenavOpen }) {
                 className="profile-dropdown-trigger"
               >
                 <Image
-                  src={userData.adm_users_profileimage || profilePic}
+                  src={getProfileImageSrc()}
                   roundedCircle
                   alt="Admin Profile"
                   className="profile-img"
+                  onError={handleImageError}
                 />
               </button>
               <div className='mr-5'>
@@ -311,7 +271,6 @@ export default function Topnavbar({ isSidenavOpen }) {
         </div>
       </div>
 
-      {/* Notification Drawer Modal */}
       {isNotificationDrawerOpen && (
         <div
           className={`drawer-modal${isNotificationDrawerOpen ? ' open' : ''}`}
@@ -415,7 +374,6 @@ export default function Topnavbar({ isSidenavOpen }) {
         </div>
       )}
 
-      {/* Profile Drawer Modal */}
       {isProfileDrawerOpen && (
         <div
           className={`drawer-modal${isProfileDrawerOpen ? ' open' : ''}`}
@@ -452,7 +410,7 @@ export default function Topnavbar({ isSidenavOpen }) {
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <img
-                  src={ReactSession.get('profileimage')}
+                  src={getProfileImageSrc()}
                   alt="Profile"
                   style={{
                     width: 36,
@@ -553,13 +511,11 @@ export default function Topnavbar({ isSidenavOpen }) {
               }}
             >
               <p style={{ margin: 0 }}>Login: <span style={{ color: '#6366f1', fontWeight: 700 }}>{loginTime}</span></p>
-              {logoutTime && <p style={{ margin: 0 }}>Logout: <span style={{ color: '#dc3545', fontWeight: 700 }}>{logoutTime}</span></p>}
             </div>
           </div>
         </div>
       )}
 
-      {/* Alerts */}
       <AnimatePresence>
         {alerts.map((alert) => (
           <CustomAlert
@@ -570,8 +526,6 @@ export default function Topnavbar({ isSidenavOpen }) {
           />
         ))}
       </AnimatePresence>
-
-
     </nav>
   );
 }

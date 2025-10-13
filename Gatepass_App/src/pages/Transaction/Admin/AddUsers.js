@@ -8,10 +8,12 @@ import CustomAlert from '../../../CustomAlert';
 
 export default function AddUser({ setTitle }) {
 
+  const [departments, setDepartments] = useState([]);
+  const [roles, setRoles] = useState([]);
   const [formData, setFormData] = useState({
     adm_users_id: "",
     adm_users_loginid: "",
-    adm_users_password: "",
+    adm_users_password: "", // Added password field
     adm_users_email: "",
     adm_users_title: "",
     adm_users_firstname: "",
@@ -66,7 +68,28 @@ export default function AddUser({ setTitle }) {
 
   const titles = ['Mr.', 'Ms.', 'Mrs.'];
   const gender = ['Male', 'Female', 'Others'];
-  const department = ['Accounts', 'Technical', 'Production'];
+
+  // Fetch departments and roles from DB
+  useEffect(() => {
+    // Fetch departments
+    axios.get(`${SERVER_PORT}/department_getalldata`)
+      .then(res => {
+        if (res.data && res.data.data) {
+          setDepartments(res.data.data.filter(dep => dep.status === true));
+        }
+      })
+      .catch(err => console.log('Department fetch error:', err));
+
+    // Fetch roles
+    axios.get(`${SERVER_PORT}/rolesload`)
+      .then(res => {
+        if (Array.isArray(res.data)) {
+          setRoles(res.data.filter(role => role.Roles_Status_Converted === 'Active'));
+        }
+      })
+      .catch(err => console.log('Roles fetch error:', err));
+  }, []);
+
   const job = ['Developer', 'Tester', 'Designer'];
   const position = ['Full-Time', 'Part-Time', 'Contract'];
   // Handle input changes
@@ -81,22 +104,37 @@ export default function AddUser({ setTitle }) {
   // Submit the form data
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Find the role ID from the role name
+    const selectedRole = roles.find(role => role.Roles_RoleName === formData.adm_users_defaultroleid);
+    if (!selectedRole) {
+        showAlert("error", "Error!", "Please select a valid role.");
+        return;
+    }
+
+    const updatedData = {
+        ...formData,
+        adm_users_defaultroleid: selectedRole.Roles_Id, // Pass the role ID to the backend
+        created_on: today
+    };
+
     try {
-      console.log(formData);
-      const response = await axios.post(`${SERVER_PORT}/userlist_adduser`, formData);
+      console.log(updatedData);
+      const response = await axios.post(`${SERVER_PORT}/userlist_adduser`, updatedData);
       if (response.status === 200) {
-        showAlert("success", "Updated!", "User updated successfully!");
-        //navigate('/home/user');  
+        showAlert("success", "Success!", "User added successfully!");
       } else {
         showAlert("error", "Error!", "Failed to add user.");
       }
     } catch (error) {
       console.error("Error adding user:", error);
-      showAlert("warning", "Warning!", "Fill the required fields.");
+      if (error.response && error.response.status === 400) {
+        showAlert("warning", "Warning!", "Fill the required fields.");
+      } else {
+        showAlert("error", "Error!", "Something went wrong.");
+      }
     }
   };
-
-
 
   return (
     <div className="edit-container">
@@ -106,7 +144,8 @@ export default function AddUser({ setTitle }) {
           <div className="section employee-details">
             <h4>User Details</h4>
             <Row>
-              <Col><Form.Group className="edit-form-group"><Form.Label className="edit-form-label">Username</Form.Label><Form.Text className="text-danger">*</Form.Text><Form.Control className="edit-form-control" type="text" name="adm_users_loginid" value={formData.adm_users_loginid} minLength={4} maxLength={25} onChange={handleDataChange} required /></Form.Group></Col>
+              <Col><Form.Group className="edit-form-group"><Form.Label className="edit-form-label">Username</Form.Label><Form.Text className="text-danger">*</Form.Text><Form.Control className="edit-form-control" type="text" name="adm_users_loginid" value={formData.adm_users_loginid} minLength={4} maxLength={25} onChange={handleDataChange} required autoComplete="off" /></Form.Group></Col>
+              <Col><Form.Group className="edit-form-group"><Form.Label className="edit-form-label">Password</Form.Label><Form.Text className="text-danger">*</Form.Text><Form.Control className="edit-form-control" type="password" name="adm_users_password" value={formData.adm_users_password} onChange={handleDataChange} required autoComplete="off"/></Form.Group></Col>
               <Col><Form.Group className="edit-form-group"><Form.Label className="edit-form-label">Email</Form.Label><Form.Text className="text-danger">*</Form.Text><Form.Control className="edit-form-control" type="text" name="adm_users_email" value={formData.adm_users_email} minLength={4} maxLength={25} onChange={handleDataChange} required /></Form.Group></Col>
               <Col><Form.Group className="edit-form-group"><Form.Label className="edit-form-label">Mobile</Form.Label><Form.Text className="text-danger">*</Form.Text><Form.Control className="edit-form-control" type="text" name="adm_users_mobile" value={formData.adm_users_mobile} minLength={10} maxLength={10} onChange={handlePhoneChange} required /></Form.Group></Col>
               <Col><Form.Group className="edit-form-group"><Form.Label className="edit-form-label">Title</Form.Label><Form.Text className="text-danger">*</Form.Text><Form.Control className="edit-form-control" as="select" name="adm_users_title" value={formData.adm_users_title} onChange={handleDataChange} required>
@@ -140,22 +179,56 @@ export default function AddUser({ setTitle }) {
           <div className="section employee-details">
             <h4>Job Role Details</h4>
             <Row>
-              <Col><Form.Group className="edit-form-group"><Form.Label className="edit-form-label">Department</Form.Label><Form.Text className="text-danger">*</Form.Text><Form.Control className="edit-form-control" as="select" name="adm_users_deptid" value={formData.adm_users_deptid} onChange={handleDataChange} required>
-                <option value="">-- SELECT --</option>
-                {department.map((dept) => (
-                  <option key={dept} value={dept}>{dept}</option>
-                ))}</Form.Control></Form.Group></Col>
-              <Col><Form.Group className="edit-form-group"><Form.Label className="edit-form-label">Job</Form.Label><Form.Text className="text-danger">*</Form.Text><Form.Control className="edit-form-control" as="select" name="adm_users_jobid" value={formData.adm_users_jobid} onChange={handleDataChange} required>
-                <option value="">-- SELECT --</option>
-                {job.map((jobid) => (
-                  <option key={jobid} value={jobid}>{jobid}</option>
-                ))}</Form.Control></Form.Group></Col>
-              <Col><Form.Group className="edit-form-group"><Form.Label className="edit-form-label">Position</Form.Label><Form.Text className="text-danger">*</Form.Text><Form.Control className="edit-form-control" as="select" name="adm_users_positionid" value={formData.adm_users_positionid} onChange={handleDataChange} required>
-                <option value="">-- SELECT --</option>
-                {position.map((positionid) => (
-                  <option key={positionid} value={positionid}>{positionid}</option>
-                ))}</Form.Control></Form.Group></Col>
-              <Col><Form.Group className="edit-form-group"><Form.Label className="edit-form-label">Phone Extension</Form.Label><Form.Text className="text-danger">*</Form.Text><Form.Control className="edit-form-control" type="text" name="adm_users_phoneextn" value={formData.adm_users_phoneextn} onChange={handleDataChange} required /></Form.Group></Col>
+              <Col>
+                <Form.Group className="edit-form-group">
+                  <Form.Label className="edit-form-label">Department</Form.Label><Form.Text className="text-danger">*</Form.Text>
+                  <Form.Control className="edit-form-control" as="select" name="adm_users_deptid" value={formData.adm_users_deptid} onChange={handleDataChange} required>
+                    <option value="">-- SELECT --</option>
+                    {departments.map((dept) => (
+                      <option key={dept.department_id} value={dept.department_name}>{dept.department_name}</option>
+                    ))}
+                  </Form.Control>
+                </Form.Group>
+              </Col>
+              <Col>
+                <Form.Group className="edit-form-group">
+                  <Form.Label className="edit-form-label">Role</Form.Label><Form.Text className="text-danger">*</Form.Text>
+                  <Form.Control className="edit-form-control" as="select" name="adm_users_defaultroleid" value={formData.adm_users_defaultroleid} onChange={handleDataChange} required>
+                    <option value="">-- SELECT --</option>
+                    {roles.map((role) => (
+                      <option key={role.Roles_Id} value={role.Roles_Id}>{role.Roles_RoleName}</option>
+                    ))}
+                  </Form.Control>
+                </Form.Group>
+              </Col>
+              <Col>
+                <Form.Group className="edit-form-group">
+                  <Form.Label className="edit-form-label">Job</Form.Label><Form.Text className="text-danger">*</Form.Text>
+                  <Form.Control className="edit-form-control" as="select" name="adm_users_jobid" value={formData.adm_users_jobid} onChange={handleDataChange} required>
+                    <option value="">-- SELECT --</option>
+                    {job.map((jobid) => (
+                      <option key={jobid} value={jobid}>{jobid}</option>
+                    ))}
+                  </Form.Control>
+                </Form.Group>
+              </Col>
+              <Col>
+                <Form.Group className="edit-form-group">
+                  <Form.Label className="edit-form-label">Position</Form.Label><Form.Text className="text-danger">*</Form.Text>
+                  <Form.Control className="edit-form-control" as="select" name="adm_users_positionid" value={formData.adm_users_positionid} onChange={handleDataChange} required>
+                    <option value="">-- SELECT --</option>
+                    {position.map((positionid) => (
+                      <option key={positionid} value={positionid}>{positionid}</option>
+                    ))}
+                  </Form.Control>
+                </Form.Group>
+              </Col>
+              <Col>
+                <Form.Group className="edit-form-group">
+                  <Form.Label className="edit-form-label">Phone Extension</Form.Label><Form.Text className="text-danger">*</Form.Text>
+                  <Form.Control className="edit-form-control" type="text" name="adm_users_phoneextn" value={formData.adm_users_phoneextn} onChange={handleDataChange} required />
+                </Form.Group>
+              </Col>
             </Row>
           </div>
 

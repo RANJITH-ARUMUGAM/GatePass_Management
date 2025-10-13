@@ -25,8 +25,6 @@ import User from "../Transaction/Admin/UserList.js";
 import Edituser from "../Transaction/Admin/Edituser.js";
 import Adduser from "../Transaction/Admin/AddUsers.js";
 
-import Lobby from '../Transaction/Lobby/Lobby.js';
-import LobbyEntry from "../Transaction/Lobby/LobbyEntry.js";
 
 import AddGateEntry from "../Transaction/VisitorsDetails/AddGateEntry.js";
 import GenerateVisitorIDCard from "../Transaction/VisitorsDetails/GenerateVisitorIDCard.js";
@@ -50,7 +48,6 @@ import EmployeeAdd from '../Transaction/Emplayoee/Emplayoeeadd.js';
 import EmployeeEdit from '../Transaction/Emplayoee/Emplayoeeedit.js';
 import ViewEmplayoee from '../Transaction/Emplayoee/Emplayoeeview';
 
-import AppointmentBookingForm from '../Transaction/BookAppointments/BookAppointment.js';
 
 import AttendanceAdmin from '../Transaction/AttendanceAdmin/AttendanceAdmin.js';
 import AttendanceEmployee from '../Transaction/AttendanceEmployee/AttendanceEmployee.js';
@@ -76,7 +73,7 @@ import AddRolesModel from "../Adminstor/Roles/AddRolesModel";
 import EditRolesModel from "../Adminstor/Roles/EditRolesModel";
 import RoleProgram from "../Adminstor/RoleProgram/RoleProgram";
 import Users from "../Adminstor/Users/Users";
-import AddUsers from "../Adminstor/Users/AddUsersModel";
+import AddUsersModel from "../Adminstor/Users/AddUsersModel";
 import EditUsersModel from "../Adminstor/Users/EditUserModel";
 import UserRole from "../Adminstor/UserRole/UserRole";
 import UserRoleView from "../Adminstor/UserRoleView/UserRoleView"
@@ -750,9 +747,6 @@ export default function Home() {
           <Route path="/employeeadd" element={<EmployeeAdd setTitle={setTitle} />} />
           <Route path="/employeeedit" element={<EmployeeEdit setTitle={setTitle} />} />
 
-          <Route path="/lobby/lobbyentry" element={<LobbyEntry setTitle={setTitle} />} />
-          <Route path="/lobby" element={<Lobby setTitle={setTitle} />} />
-          <Route path="/lobby/bookappointment" element={<AppointmentBookingForm setTitle={setTitle} />} />
 
           <Route path="/metadata" element={<Meta setTitle={setTitle} />} />
 
@@ -772,8 +766,8 @@ export default function Home() {
           <Route path="/roleprogram" element={<RoleProgram setTitle={setTitle} />} />
 
           <Route path="/Users" element={<Users setTitle={setTitle} />} />
-          <Route path="/adduser" element={<AddUsers setTitle={setTitle} />} />
-          <Route path="/edituser/:id" element={<EditUsersModel setTitle={setTitle} />} />
+          <Route path="/Users/addusersmodel" element={<AddUsersModel setTitle={setTitle} />} />
+          <Route path="/Users/edituser/:id" element={<EditUsersModel setTitle={setTitle} />} />
           <Route path="/profileview/:id" element={<ProfileView setTitle={setTitle} />} />
 
           <Route path="/userrole" element={<UserRole setTitle={setTitle} />} />

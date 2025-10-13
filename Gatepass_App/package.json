@@ -18,7 +18,7 @@
     "crypto-js": "^4.2.0",
     "date-fns": "^4.1.0",
     "fortawesome": "^0.0.1-security",
-    "framer-motion": "^12.4.7",
+    "framer-motion": "^12.23.12",
     "html2canvas": "1.4.1",
     "lucide-react": "^0.475.0",
     "qrious": "^4.0.2",

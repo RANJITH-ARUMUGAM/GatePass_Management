@@ -4,7 +4,6 @@ import Select from 'react-select';
 import { useState, useEffect } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { Form, Button, Row, Col, Table } from "react-bootstrap"
-import Searchable from "react-searchable-dropdown";
 import { SERVER_PORT } from '../../../constant';
 import { ReactSession } from 'react-client-session';
 
@@ -43,8 +42,6 @@ function UserRole({ setTitle }) {
 
 
     useEffect(() => {
-
-
         setOrgIsDisabled(true)
 
         const username = ReactSession.get("username");

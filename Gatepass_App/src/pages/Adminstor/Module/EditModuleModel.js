@@ -14,6 +14,7 @@ function EditModuleModel({ setTitle }) {
 
     const navigate = useNavigate()
     const [DisplayValues, setDisplayValues] = useState();
+    const [searchTerm, setSearchTerm] = useState('');
 
     const [values, setModValues] = useState({
         Module_ID: "",

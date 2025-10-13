@@ -40,7 +40,7 @@ const db = new Pool({
   host: process.env.DB_HOST || "localhost",
   user: process.env.DB_USER || "postgres",
   password: process.env.DB_PASSWORD || "5441",
-  database: process.env.DB_NAME || "NEW_GMS",
+  database: process.env.DB_NAME || "GMS",
   port: process.env.DB_PORT || 5432
 });
 
@@ -63,6 +63,53 @@ transporter.verify((err, success) => {
 ////-------------------------------------Login Page Begins Here------------------------------------------------------////
 
 
+// app.post('/user_login', async (req, res) => {
+//   const { username, password } = req.body;
+//   console.log("/login " + username, password);
+
+//   db.query("SELECT * FROM ADM_User_T WHERE ADM_Users_loginid=$1", [username], async (err, results) => {
+//     if (err) {
+//       console.error("Database query error:", err);
+//       res.status(500).send({ success: false, error: "Database error" });
+//     } else {
+//       if (results.rowCount > 0) {
+//         const user = results.rows[0];
+
+//         if (!user.adm_users_status) {
+//           return res.json({
+//             success: false,
+//             message: "Your account is not active. Please contact the administrator.",
+//             status: "inactive"
+//           });
+//         }
+
+//         // Compare entered password with hashed password stored in the database
+//         const isPasswordValid = await bcrypt.compare(password, user.adm_users_password);
+
+//         if (isPasswordValid) {
+//           res.json({
+//             success: true,
+//             message: "Login Successful",
+//             id: user.adm_users_id,
+//             loginid: user.adm_users_loginid,
+//             UserRole: user.adm_users_defaultroleid,
+//             name: `${user.adm_users_firstname} ${user.adm_users_lastname}`,
+//             avatar: user.adm_users_profileimage,
+//           });
+//           console.log("Success");
+//         } else {
+//           res.json({ success: false, message: "Invalid Login Credential" });
+//           console.log("Failed - Incorrect Password");
+//         }
+//       } else {
+//         res.json({ success: false, message: "Invalid Login Credential" });
+//         console.log("Failed - No User");
+//       }
+//     }
+//   });
+// });
+
+// Update your /user_login endpoint to handle profile images
 app.post('/user_login', async (req, res) => {
   const { username, password } = req.body;
   console.log("/login " + username, password);
@@ -87,13 +134,25 @@ app.post('/user_login', async (req, res) => {
         const isPasswordValid = await bcrypt.compare(password, user.adm_users_password);
 
         if (isPasswordValid) {
+          // Convert profile image to base64 if it exists
+          let avatar = null;
+          if (user.adm_users_profileimage) {
+            if (user.adm_users_profileimage.type === 'Buffer') {
+              const base64Image = Buffer.from(user.adm_users_profileimage.data).toString('base64');
+              avatar = `data:image/png;base64,${base64Image}`;
+            } else if (typeof user.adm_users_profileimage === 'string') {
+              avatar = user.adm_users_profileimage;
+            }
+          }
+
           res.json({
             success: true,
             message: "Login Successful",
             id: user.adm_users_id,
             loginid: user.adm_users_loginid,
+            UserRole: user.adm_users_defaultroleid,
             name: `${user.adm_users_firstname} ${user.adm_users_lastname}`,
-            avatar: user.adm_users_profileimage,
+            avatar: avatar,
           });
           console.log("Success");
         } else {
@@ -236,9 +295,12 @@ app.get('/edit_profile/:loginid', async (req, res) => {
     const user = result.rows[0];
 
     // Convert buffer to base64 string
-    if (user.adm_users_profileimage && user.adm_users_profileimage instanceof Buffer) {
-      const base64Image = user.adm_users_profileimage.toString('base64');
-      user.adm_users_profileimage = `data:image/jpeg;base64,${base64Image}`;
+    if (user.adm_users_profileimage && user.adm_users_profileimage.type === 'Buffer') {
+      // Convert the Buffer object to a Base64 string
+      const base64Image = Buffer.from(user.adm_users_profileimage.data).toString('base64');
+
+      // Prepend the data URI scheme
+      user.adm_users_profileimage = `data:image/png;base64,${base64Image}`;
     }
 
     return res.json(user);
@@ -264,17 +326,34 @@ app.put('/edit_profile/:mail', async (req, res) => {
   `;
 
   const params = [
-    updatedData.adm_users_address1,
-    updatedData.adm_users_address2,
-    updatedData.adm_users_address3,
-    updatedData.adm_users_dob,
-    updatedData.adm_users_gender
+    updatedData.adm_users_address1 || null,
+    updatedData.adm_users_address2 || null,
+    updatedData.adm_users_address3 || null,
+    updatedData.adm_users_dob || null,
+    updatedData.adm_users_gender || null,
   ];
 
   if (updatedData.adm_users_profileimage) {
     try {
-      const base64Data = updatedData.adm_users_profileimage.replace(/^data:image\/\w+;base64,/, '');
-      const imageBuffer = Buffer.from(base64Data, 'base64');
+      let imageBuffer;
+
+      if (typeof updatedData.adm_users_profileimage === "string") {
+        // case: base64 string from frontend
+        const base64Data = updatedData.adm_users_profileimage.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
+        imageBuffer = Buffer.from(base64Data, 'base64');
+      } else if (updatedData.adm_users_profileimage.type === "Buffer" || updatedData.adm_users_profileimage.data) {
+        // case: JSON with Buffer-like { type: 'Buffer', data: [...] }
+        imageBuffer = Buffer.from(updatedData.adm_users_profileimage.data);
+      } else if (Buffer.isBuffer(updatedData.adm_users_profileimage)) {
+        // case: already a Buffer
+        imageBuffer = updatedData.adm_users_profileimage;
+      } else {
+        return res.status(400).json({ success: false, error: "Unsupported image format" });
+      }
+
+      if (!imageBuffer || imageBuffer.length === 0) {
+        return res.status(400).json({ success: false, error: "Invalid image data" });
+      }
 
       if (imageBuffer.length > 5 * 1024 * 1024) {
         return res.status(400).json({ success: false, error: "Image too large. Maximum 5MB allowed." });
@@ -282,18 +361,19 @@ app.put('/edit_profile/:mail', async (req, res) => {
 
       query += `, ADM_Users_ProfileImage = $6::bytea`;
       params.push(imageBuffer);
+
     } catch (err) {
+      console.error("Image conversion error:", err);
       return res.status(400).json({ success: false, error: "Invalid image data" });
     }
   }
 
-  // query += ` WHERE LOWER(ADM_Users_Email) = LOWER($${params.length + 1})`;
+
   query += ` WHERE LOWER(ADM_Users_LoginID) = LOWER($${params.length + 1})`;
   params.push(mail);
 
   console.log("Executing query:", query);
   console.log("With params:", params);
-
 
   db.query(query, params, (err, results) => {
     if (err) {
@@ -312,15 +392,99 @@ app.put('/edit_profile/:mail', async (req, res) => {
 });
 
 
+// app.post('/validate_password', async (req, res) => {
+//   const { email, password } = req.body;
 
-//Change the Password by User
-const saltRounds = 10;
+//   try {
+//     const query = 'SELECT adm_users_password FROM adm_user_t WHERE adm_users_loginid = $1';
+//     const result = await pool.query(query, [email]);
 
+//     if (result.rowCount === 0) {
+//       return res.status(404).json({ isValid: false, message: 'User not found' });
+//     }
+
+//     const storedHashedPassword = result.rows[0].adm_users_password;
+//     const isMatch = await bcrypt.compare(password, storedHashedPassword);
+
+//     if (isMatch) {
+//       return res.status(200).json({ isValid: true });
+//     } else {
+//       return res.status(401).json({ isValid: false, message: 'Invalid password' });
+//     }
+//   } catch (err) {
+//     console.error('Validation error:', err);
+//     return res.status(500).json({ isValid: false, message: 'Server error' });
+//   }
+// });
+
+// //Change the Password by User
+// const saltRounds = 10;
+
+// app.put('/change_password/:mail', (req, res) => {
+//   const mail = req.params.mail;
+//   const { newPassword } = req.body;
+
+//   console.log("Change password for:", mail);
+
+//   bcrypt.hash(newPassword, saltRounds, (err, hashedPassword) => {
+//     if (err) {
+//       console.error("Hash error:", err);
+//       return res.status(500).json({ success: false, error: 'Error hashing password' });
+//     }
+
+//     const query = `
+//       UPDATE adm_user_t
+//       SET adm_users_password = $1, modified_on = CURRENT_DATE, modified_by = 'System'
+//       WHERE adm_users_loginid = $2
+//     `;
+
+//     db.query(query, [hashedPassword, mail], (err, result) => {
+//       if (err) {
+//         console.error("DB error:", err);
+//         return res.status(500).json({ success: false, error: 'Database error' });
+//       }
+
+//       if (result.rowCount > 0) {
+//         console.log("Password updated successfully for", mail);
+//         return res.status(200).json({ success: true, message: 'Password changed' });
+//       } else {
+//         console.log("No matching user found for", mail);
+//         return res.status(404).json({ success: false, error: "User not found" });
+//       }
+//     });
+//   });
+// });
+
+
+app.post('/validate_password', async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    const query = 'SELECT adm_users_password FROM adm_user_t WHERE adm_users_loginid = $1';
+    const result = await pool.query(query, [email]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ isValid: false, message: 'User not found' });
+    }
+
+    const storedHashedPassword = result.rows[0].adm_users_password;
+    const isMatch = await bcrypt.compare(password, storedHashedPassword);
+
+    if (isMatch) {
+      return res.status(200).json({ isValid: true });
+    } else {
+      return res.status(401).json({ isValid: false, message: 'Invalid password' });
+    }
+  } catch (err) {
+    console.error('Validation error:', err);
+    return res.status(500).json({ isValid: false, message: 'Server error' });
+  }
+});
+
+// Endpoint to change the password
 app.put('/change_password/:mail', (req, res) => {
   const mail = req.params.mail;
   const { newPassword } = req.body;
-
-  console.log("Change password for:", mail);
 
   bcrypt.hash(newPassword, saltRounds, (err, hashedPassword) => {
     if (err) {
@@ -334,17 +498,15 @@ app.put('/change_password/:mail', (req, res) => {
       WHERE adm_users_loginid = $2
     `;
 
-    db.query(query, [hashedPassword, mail], (err, result) => {
+    pool.query(query, [hashedPassword, mail], (err, result) => {
       if (err) {
         console.error("DB error:", err);
         return res.status(500).json({ success: false, error: 'Database error' });
       }
 
       if (result.rowCount > 0) {
-        console.log("Password updated successfully for", mail);
         return res.status(200).json({ success: true, message: 'Password changed' });
       } else {
-        console.log("No matching user found for", mail);
         return res.status(404).json({ success: false, error: "User not found" });
       }
     });
@@ -352,64 +514,173 @@ app.put('/change_password/:mail', (req, res) => {
 });
 
 
-
 ////-------------------------------------Admin Page UserList Ends Here------------------------------------------------------////
 
 ////-------------------------------------User Page EditUser Begins Here------------------------------------------------------////
 
-//Add a New User by Admin
+// Add a New User by Admin
+// app.post("/userlist_adduser", (req, res) => {
+//   const {
+//     adm_users_loginid, adm_users_password, adm_users_email, adm_users_title, adm_users_firstname, adm_users_lastname, adm_users_mobile,
+//     adm_users_address1, adm_users_address2, adm_users_address3, adm_users_dob, adm_users_gender,
+//     adm_users_phoneextn, adm_users_deptid, adm_users_jobid, adm_users_positionid, adm_users_islocked,
+//     adm_users_status, created_by, adm_users_defaultroleid
+//   } = req.body;
+
+//   console.log("/userlist_adduser");
+//   // Check for required fields
+//   if (!adm_users_loginid || !adm_users_email || !adm_users_firstname) {
+//     res.status(400).json({ error: "Required fields are missing." });
+//     return;
+//   }
+
+//   const query = `
+//     INSERT INTO adm_user_t (
+//       adm_users_loginid, adm_users_password, adm_users_email, adm_users_title, adm_users_firstname, adm_users_lastname, adm_users_mobile,
+//       adm_users_gender, adm_users_dob, adm_users_address1, adm_users_address2, adm_users_address3,
+//       adm_users_deptid, adm_users_jobid, adm_users_positionid, adm_users_phoneextn, adm_users_islocked,
+//       adm_users_status, created_on, created_by, adm_users_defaultroleid
+//     ) VALUES (
+//       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, CURRENT_DATE, $19, $20
+//     )
+//   `;
+
+//   const values = [
+//     adm_users_loginid, adm_users_password, adm_users_email, adm_users_title, adm_users_firstname, adm_users_lastname, adm_users_mobile,
+//     adm_users_gender, adm_users_dob, adm_users_address1, adm_users_address2, adm_users_address3,
+//     adm_users_deptid, adm_users_jobid, adm_users_positionid, adm_users_phoneextn,
+//     adm_users_islocked === true ? true : false,
+//     adm_users_status === true ? true : false,
+//     created_by,
+//     adm_users_defaultroleid
+//   ];
+
+//   db.query(query, values, (err) => {
+//     if (err) {
+//       console.error("Database Error:", err);
+//       res.status(500).json({ error: "Error adding user." });
+//     } else {
+//       res.status(200).json({ message: "User added successfully." });
+//     }
+//   });
+// });
+
+// Add a New User by Admin with encrypted password
+
 app.post("/userlist_adduser", (req, res) => {
   const {
     adm_users_loginid, adm_users_password, adm_users_email, adm_users_title, adm_users_firstname, adm_users_lastname, adm_users_mobile,
     adm_users_address1, adm_users_address2, adm_users_address3, adm_users_dob, adm_users_gender,
     adm_users_phoneextn, adm_users_deptid, adm_users_jobid, adm_users_positionid, adm_users_islocked,
-    adm_users_status, created_by
+    adm_users_status, created_by, adm_users_defaultroleid
   } = req.body;
 
   console.log("/userlist_adduser");
-  //  Check for required fields
-  if (!adm_users_loginid || !adm_users_email || !adm_users_firstname) {
+
+  // Check for required fields
+  if (!adm_users_loginid || !adm_users_password || !adm_users_email || !adm_users_firstname) {
     res.status(400).json({ error: "Required fields are missing." });
     return;
   }
 
-  //  Fix: Remove `created_on` from VALUES since it's handled by `NOW()`
-  const query = `
-    INSERT INTO adm_user_t (
-      adm_users_loginid, adm_users_password, adm_users_email, adm_users_title, adm_users_firstname, adm_users_lastname, adm_users_mobile,
-      adm_users_gender,adm_users_dob,adm_users_address1, adm_users_address2, adm_users_address3, 
-      adm_users_deptid, adm_users_jobid, adm_users_positionid,adm_users_phoneextn, adm_users_islocked,
-      adm_users_status, created_on, created_by
-    ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,CURRENT_DATE,$19
-    )
-  `;
-
-  const values = [
-    adm_users_loginid, adm_users_password, adm_users_email, adm_users_title, adm_users_firstname, adm_users_lastname, adm_users_mobile,
-    adm_users_gender, adm_users_dob, adm_users_address1, adm_users_address2, adm_users_address3,
-    adm_users_deptid, adm_users_jobid, adm_users_positionid, adm_users_phoneextn,
-    adm_users_islocked === true ? true : false,  //  Ensure Boolean conversion 
-    adm_users_status === true ? true : false,  // Ensure Boolean conversion
-    created_by
-  ];
-
-  db.query(query, values, (err) => {
+  // Hash the password before saving
+  bcrypt.hash(adm_users_password, 10, (err, hash) => {
     if (err) {
-      console.error("Database Error:", err);
-      res.status(500).json({ error: "Error adding user." });
-    } else {
-      res.status(200).json({ message: "User added successfully." });
+      console.error("Password hashing error:", err);
+      return res.status(500).json({ error: "Error processing password." });
     }
+
+    const query = `
+      INSERT INTO adm_user_t (
+        adm_users_loginid, adm_users_password, adm_users_email, adm_users_title, adm_users_firstname, adm_users_lastname, adm_users_mobile,
+        adm_users_gender, adm_users_dob, adm_users_address1, adm_users_address2, adm_users_address3,
+        adm_users_deptid, adm_users_jobid, adm_users_positionid, adm_users_phoneextn, adm_users_islocked,
+        adm_users_status, created_on, created_by, adm_users_defaultroleid
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, CURRENT_DATE, $19, $20
+      )
+    `;
+
+    const values = [
+      adm_users_loginid, hash, adm_users_email, adm_users_title, adm_users_firstname, adm_users_lastname, adm_users_mobile,
+      adm_users_gender, adm_users_dob, adm_users_address1, adm_users_address2, adm_users_address3,
+      adm_users_deptid, adm_users_jobid, adm_users_positionid, adm_users_phoneextn,
+      adm_users_islocked === true,
+      adm_users_status === true,
+      created_by,
+      adm_users_defaultroleid
+    ];
+
+    db.query(query, values, (err) => {
+      if (err) {
+        console.error("Database Error:", err);
+        res.status(500).json({ error: "Error adding user." });
+      } else {
+        res.status(200).json({ message: "User added successfully." });
+      }
+    });
   });
 });
 
 
+// Update a User's Password - New Endpoint (Secure Version)
+app.put("/userlist_changepassword/:id", async (req, res) => {
+  const userId = req.params.id;
+  const { newPassword } = req.body;
 
-//Update a User by Admin(Fixed)
+  // CRITICAL SECURITY STEP:
+  // You must implement a proper authentication and authorization check here.
+  // Do NOT trust the client to send the user's role.
+  // Instead, get the current user's role from your session, JWT, or other trusted source.
+  const currentUserRole = req.session.user.role; // Example using a session
+  if (currentUserRole !== 'Administrator') {
+    return res.status(403).json({ success: false, error: "Access denied. Only Administrators can change passwords." });
+  }
+
+  if (!newPassword) {
+    return res.status(400).json({ error: "New password is required." });
+  }
+
+  try {
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    const query = `
+          UPDATE adm_user_t
+          SET adm_users_password = $1, modified_on = CURRENT_DATE
+          WHERE adm_users_id = $2
+          RETURNING *;
+      `;
+
+    const values = [hashedPassword, userId];
+
+    db.query(query, values, (err, result) => {
+      if (err) {
+        console.error("Database Error:", err);
+        return res.status(500).json({ error: "Error updating password." });
+      } else {
+        if (result.rowCount === 0) {
+          return res.status(404).json({ success: false, error: "User not found" });
+        } else {
+          res.status(200).json({ success: true, message: "Password updated successfully." });
+        }
+      }
+    });
+  } catch (error) {
+    console.error("Error hashing password:", error);
+    res.status(500).json({ error: "Error processing password." });
+  }
+});
+
+// Update a User by Admin (Fixed)
 app.put("/userlist_editusers/:id", async (req, res) => {
   const userId = req.params.id;
   const updatedData = req.body;
+
+  // The password field should not be in the updatedData object for this route.
+  if (updatedData.adm_users_password) {
+    delete updatedData.adm_users_password;
+  }
 
   console.log("/userlist_editusers : " + userId);
   const fields = Object.keys(updatedData)
@@ -420,11 +691,11 @@ app.put("/userlist_editusers/:id", async (req, res) => {
   values.push(userId);
 
   const query = `
-      UPDATE adm_user_t
-      SET ${fields}
-      WHERE adm_users_id = $${values.length}
-      RETURNING *;
-    `;
+    UPDATE adm_user_t
+    SET ${fields}
+    WHERE adm_users_id = $${values.length}
+    RETURNING *;
+  `;
 
   db.query(query, values, (err, result) => {
     if (err) {
@@ -433,18 +704,17 @@ app.put("/userlist_editusers/:id", async (req, res) => {
     } else {
       if (result.rowCount === 0) {
         return res.status(404).json({ success: false, error: "User not found" });
-      }
-      else
+      } else {
         res.status(200).json({ success: true, user: result.rows[0] });
+      }
     }
   });
 });
 
 ////-------------------------------------User Page EditUser Ends Here------------------------------------------------------////
 
+
 ////-------------------------------------MetaData Page Starts Here------------------------------------------------------////
-
-
 
 app.get('/metadata_Detail', (req, res) => {
   //const { headerID } = req.params; 
@@ -461,6 +731,7 @@ app.get('/metadata_Detail', (req, res) => {
   )
 
 });
+
 app.post('/metadata_Header', (req, res) => {
 
   console.log('MetaData Header')
@@ -530,6 +801,7 @@ app.post('/metadata_Details', (req, res) => {
   );
 });
 ////-------------------------------------MetaData Page Ends Here------------------------------------------------------////
+
 
 ////-------------------------------------Visitor Details Starts Here------------------------------------------------------////
 app.use(bodyParser.json({ limit: '10mb' }));
@@ -984,67 +1256,234 @@ app.post('/reset-password', async (req, res) => {
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// -------------------- Visitor OTP APIs --------------------
+// // -------------------- Visitor OTP APIs --------------------
 
-// Send OTP for Visitor Entry
-app.post('/sendVisitorOTP', async (req, res) => {
+// // Send OTP for Visitor Entry
+// app.post('/sendVisitorOTP', async (req, res) => {
+//   console.log("Request Body:", req.body);
+//   const { email } = req.body;
+//   if (!email) return res.status(400).json({ message: 'Email is required' });
+
+//   const otp = generateOTP();
+//   const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes validity
+
+//   try {
+//     // Save or update OTP in visitor table
+//     await db.query(
+//       `INSERT INTO GMS_Visitor_OTP (email, otp, otp_expires)
+//         VALUES ($1, $2, $3)
+//         ON CONFLICT (email)
+//         DO UPDATE SET otp = EXCLUDED.otp, otp_expires = EXCLUDED.otp_expires;
+//       `,
+//       [email, otp, otpExpires]
+//     );
+
+//     // Send email with OTP
+//     await transporter.sendMail({
+//       from: process.env.EMAIL,
+//       to: email,
+//       subject: 'Visitor Verification OTP',
+//       text: `Your OTP is ${otp}. It will expire in 10 minutes.`,
+//     });
+
+//     res.status(200).json({ message: 'Visitor OTP sent successfully' });
+//   } catch (err) {
+//     console.error('Error in /sendVisitorOTP:', err);
+//     res.status(500).json({ message: 'Error sending Visitor OTP' });
+//   }
+// });
+
+// // Verify Visitor OTP
+// app.post('/verifyVisitorOTP', async (req, res) => {
+//   const { email, otp } = req.body;
+//   if (!email || !otp) {
+//     return res.status(400).json({ success: false, message: 'Email and OTP are required' });
+//   }
+
+//   try {
+//     const result = await db.query(
+//       'SELECT * FROM GMS_Visitor_OTP WHERE email = $1 AND otp = $2 AND otp_expires > NOW()',
+//       [email, otp]
+//     );
+
+//     if (result.rows.length > 0) {
+//       return res.status(200).json({ success: true, message: 'Visitor OTP verified successfully' });
+//     } else {
+//       return res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
+//     }
+//   } catch (err) {
+//     console.error('Error in /verifyVisitorOTP:', err);
+//     res.status(500).json({ success: false, message: 'Visitor OTP verification failed' });
+//   }
+// });
+// //////////////////////////////////////////////////////////////////////  visitors Email OTP //////////////
+
+
+// //////////////////////////////////////////////////////////////////////  visitors SMS  OTP //////////////
+
+
+// // Send OTP for Visitor Entry via SMS
+// app.post('/sendVisitorSmsOTP', async (req, res) => {
+//   console.log("Request Body:", req.body);
+//   const { phone } = req.body;
+//   if (!phone) {
+//     return res.status(400).json({ message: 'Phone number is required' });
+//   }
+
+//   const otp = generateOTP();
+//   const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes validity
+
+//   try {
+//     // Save or update OTP in a new visitor_sms_otp table
+//     // Ensure you have a 'GMS_Visitor_Sms_OTP' table with columns: 'phone' (primary key), 'otp', 'otp_expires'.
+//     await db.query(
+//       `INSERT INTO GMS_Visitor_Sms_OTP (phone, otp, otp_expires)
+//         VALUES ($1, $2, $3)
+//         ON CONFLICT (phone)
+//         DO UPDATE SET otp = EXCLUDED.otp, otp_expires = EXCLUDED.otp_expires;
+//       `,
+//       [phone, otp, otpExpires]
+//     );
+
+//     // Send SMS with OTP using the placeholder function
+//     const smsMessage = `Your OTP is ${otp}. It will expire in 10 minutes.`;
+//     await sendSms(phone, smsMessage);
+
+//     res.status(200).json({ message: 'Visitor SMS OTP sent successfully' });
+//   } catch (err) {
+//     console.error('Error in /sendVisitorSmsOTP:', err);
+//     res.status(500).json({ message: 'Error sending Visitor SMS OTP' });
+//   }
+// });
+
+// // Verify Visitor SMS OTP
+// app.post('/verifyVisitorSmsOTP', async (req, res) => {
+//   const { phone, otp } = req.body;
+//   if (!phone || !otp) {
+//     return res.status(400).json({ success: false, message: 'Phone number and OTP are required' });
+//   }
+
+//   try {
+//     const result = await db.query(
+//       'SELECT * FROM GMS_Visitor_Sms_OTP WHERE phone = $1 AND otp = $2 AND otp_expires > NOW()',
+//       [phone, otp]
+//     );
+
+//     if (result.rows.length > 0) {
+//       return res.status(200).json({ success: true, message: 'Visitor SMS OTP verified successfully' });
+//     } else {
+//       return res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
+//     }
+//   } catch (err) {
+//     console.error('Error in /verifyVisitorSmsOTP:', err);
+//     res.status(500).json({ success: false, message: 'Visitor SMS OTP verification failed' });
+//   }
+// });
+
+
+// Function for sending emails using Nodemailer
+
+
+const sendEmail = async (to, subject, text) => {
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: to,
+    subject: subject,
+    text: text,
+  };
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`Email sent successfully to ${to}`);
+    return true;
+  } catch (error) {
+    console.error('Error sending email:', error);
+    throw error;
+  }
+};
+
+// Placeholder function for sending SMS, since you only have Nodemailer
+const sendSms = async (to, message) => {
+  console.log(`SMS functionality not implemented. Attempted to send to ${to} with message: ${message}`);
+  // You would implement a service like Twilio here if needed
+  return true;
+};
+
+// Send OTP for Visitor Entry (unified for both email and SMS)
+app.post('/sendOTP', async (req, res) => {
   console.log("Request Body:", req.body);
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ message: 'Email is required' });
+  const { contact_info, contact_type } = req.body;
 
+  // Validate request body
+  if (!contact_info || !contact_type) {
+    return res.status(400).json({ message: 'Contact information and type are required' });
+  }
+
+  // Generate a new 6-digit OTP
   const otp = generateOTP();
-  const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes validity
+  // Set OTP to expire in 10 minutes from now
+  const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
 
   try {
-    // Save or update OTP in visitor table
+    // Save or update the OTP in the GMS_OTP table.
+    // The ON CONFLICT clause handles cases where an OTP already exists for the contact,
+    // updating it instead of creating a new row.
     await db.query(
-      `INSERT INTO GMS_Visitor_OTP (email, otp, otp_expires)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (email)
-        DO UPDATE SET otp = EXCLUDED.otp, otp_expires = EXCLUDED.otp_expires;
-      `,
-      [email, otp, otpExpires]
+      `INSERT INTO GMS_OTP (contact_info, contact_type, otp, otp_expires)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (contact_info, contact_type)
+             DO UPDATE SET otp = EXCLUDED.otp, otp_expires = EXCLUDED.otp_expires;
+            `,
+      [contact_info, contact_type, otp, otpExpires]
     );
 
-    // Send email with OTP
-    await transporter.sendMail({
-      from: process.env.EMAIL,
-      to: email,
-      subject: 'Visitor Verification OTP',
-      text: `Your OTP is ${otp}. It will expire in 10 minutes.`,
-    });
+    // Conditionally send the OTP via email or SMS
+    if (contact_type === 'email') {
+      const subject = 'Visitor Verification OTP';
+      const text = `Your OTP is ${otp}. It will expire in 10 minutes.`;
+      await sendEmail(contact_info, subject, text);
+    } else if (contact_type === 'phone') {
+      const message = `Your OTP is ${otp}. It will expire in 10 minutes.`;
+      await sendSms(contact_info, message);
+    } else {
+      return res.status(400).json({ message: 'Invalid contact type' });
+    }
 
-    res.status(200).json({ message: 'Visitor OTP sent successfully' });
+    res.status(200).json({ message: 'OTP sent successfully' });
   } catch (err) {
-    console.error('Error in /sendVisitorOTP:', err);
-    res.status(500).json({ message: 'Error sending Visitor OTP' });
+    // Log the full error object for detailed debugging
+    console.error('Error in /sendOTP:', err);
+    // Provide a generic, safe error message to the client
+    res.status(500).json({ message: 'Error sending OTP' });
   }
 });
 
-// Verify Visitor OTP
-app.post('/verifyVisitorOTP', async (req, res) => {
-  const { email, otp } = req.body;
-  if (!email || !otp) {
-    return res.status(400).json({ success: false, message: 'Email and OTP are required' });
+// Verify Visitor OTP (unified for both email and SMS)
+app.post('/verifyOTP', async (req, res) => {
+  const { contact_info, contact_type, otp } = req.body;
+
+  if (!contact_info || !contact_type || !otp) {
+    return res.status(400).json({ success: false, message: 'Contact info, type, and OTP are required' });
   }
 
   try {
     const result = await db.query(
-      'SELECT * FROM GMS_Visitor_OTP WHERE email = $1 AND otp = $2 AND otp_expires > NOW()',
-      [email, otp]
+      `SELECT * FROM GMS_OTP
+       WHERE contact_info = $1 AND contact_type = $2 AND otp = $3 AND otp_expires > NOW()`,
+      [contact_info, contact_type, otp]
     );
 
     if (result.rows.length > 0) {
-      return res.status(200).json({ success: true, message: 'Visitor OTP verified successfully' });
+      return res.status(200).json({ success: true, message: 'OTP verified successfully' });
     } else {
       return res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
     }
   } catch (err) {
-    console.error('Error in /verifyVisitorOTP:', err);
-    res.status(500).json({ success: false, message: 'Visitor OTP verification failed' });
+    console.error('Error in /verifyOTP:', err);
+    res.status(500).json({ success: false, message: 'OTP verification failed' });
   }
 });
 
+// //////////////////////////////////////////////////////////////////////  visitors SMS OTP //////////////
 
 
 
@@ -1076,34 +1515,47 @@ app.get('/visitor-image/:id', async (req, res) => {
 app.get('/allvisitors', (req, res) => {
   console.log("/allvis visitors request received");
 
-  db.query(`
-    SELECT 
-      gms_gateentry_id AS id,
-      gms_visitorname AS visitor_name,
-      gms_visitorfrom AS visitor_from,
-      gms_tomeet AS to_meet,
-      
-      gms_visitpurpose AS purpose,
-      gms_expectedexit AS expectedExitTime,
-      gms_vehicleno AS vehicle_no,
-      gms_intime AS check_in,
-      gms_outtime AS check_out,
-      gms_status AS status,
-      
-      gms_identificationtype AS id_type,
-      gms_identificationno AS id_number,
-      
-      gms_mobileno AS phone_number,
-      gms_emailid AS email,
-      
-      created_on,
-      created_by,
-      modified_on,
-      modified_by,
-      
-      gms_visitorimage AS image_data
-    FROM public.gms_gate_entries ORDER BY created_on DESC
-  `, (err, results) => {
+  db.query(`SELECT 
+              ge.gms_gateentry_id AS id,
+              ge.gms_visitorname AS visitor_name,
+              ge.gms_visitorfrom AS visitor_from,
+              ge.gms_tomeet AS to_meet_employeename,
+              
+              -- From employee table
+              emp.gms_department AS emp_department,
+              emp.gms_designation AS emp_designation,
+              
+              -- From admin user table
+              adm.adm_users_deptid AS adm_department_id,
+              adm.adm_users_jobid AS adm_role_id,
+              
+              ge.gms_visitpurpose AS purpose,
+              ge.gms_expectedexit AS expected_exit_time,
+              ge.gms_vehicleno AS vehicle_no,
+              ge.gms_intime AS check_in,
+              ge.gms_outtime AS check_out,
+              ge.gms_status AS status,
+              
+              ge.gms_identificationtype AS id_type,
+              ge.gms_identificationno AS id_number,
+              
+              ge.gms_mobileno AS phone_number,
+              ge.gms_emailid AS email,
+              
+              ge.created_on,
+              ge.created_by,
+              ge.modified_on,
+              ge.modified_by,
+              
+              ge.gms_visitorimage AS image_data,
+              ge.gms_visitorimage_bytea AS image_blob
+              
+          FROM public.gms_gate_entries ge
+          LEFT JOIN public.gms_emplayoee_tbl emp
+                ON ge.gms_tomeet = CONCAT(emp.gms_first_name, ' ', emp.gms_last_name)
+          LEFT JOIN public.adm_user_t adm
+                ON ge.gms_tomeet = CONCAT(adm.adm_users_firstname, ' ', adm.adm_users_lastname)
+          ORDER BY ge.created_on DESC;`, (err, results) => {
     if (err) {
       console.error("Database query error:", err);
       return res.status(500).send({
@@ -3810,8 +4262,8 @@ app.get('/rolecodemaxnum/:code', (req, res) => {
 
 
 app.get('/roleprorole/:bu/:ou', (req, res) => {
-  const BU = req.params.bu
-  const OU = req.params.ou
+
+
   console.log('/roleprorole/:bu/:ou', BU, OU);
   db.query(`SELECT * FROM public."GMS_Roles" where "Roles_Status" = $1 AND "Businessunit_ID" = $2 and "Organisation_ID" = $3`, [true, BU, OU], (error, results) => {
     if (error) {
@@ -4019,8 +4471,8 @@ app.get('/userrole', (req, res) => {
 
 app.get('/userroledefault/:roleid', (req, res) => {
   const roleid = req.params.roleid
-  const BU = req.params.bu
-  const OU = req.params.ou
+
+
 
   console.log('/userroledefault/:roleid', roleid);
 
@@ -4098,7 +4550,29 @@ app.get('/userroleroles', (req, res) => {
 
 app.get('/userroleuser', (req, res) => {
   console.log('/userroleuser')
-  db.query(`SELECT * FROM public."GMS_User" where  "Users_IsLocked" =$1`, [false], (error, results) => {
+  db.query(`
+    SELECT 
+      "Users_ID",
+      "Users_LoginID",
+      "Users_email"     AS "Users_Email",
+      "Users_Mobile"::text AS "Users_Mobile",   -- cast to text
+      NULL              AS "Users_DeptID",
+      "Users_IsLocked"
+    FROM public."GMS_User"
+    WHERE "Users_IsLocked" = $1
+
+    UNION ALL
+
+    SELECT 
+      adm_users_id      AS "Users_ID",
+      adm_users_loginid AS "Users_LoginID",
+      adm_users_email   AS "Users_Email",
+      adm_users_mobile::text AS "Users_Mobile", -- cast to text
+      adm_users_deptid  AS "Users_DeptID",
+      adm_users_islocked AS "Users_IsLocked"
+    FROM public.adm_user_t
+    WHERE adm_users_islocked = $1;
+`, [false], (error, results) => {
     if (error) {
       console.error('Error executing query', error);
       res.status(500).json({ error });

@@ -256,8 +256,9 @@ const GenerateVisitorIDCard = ({ setTitle, visitor, visitorId, showCard = true, 
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 mt-2">
+    <div className="bg-gray-100 mt-2">
       <h2 className="text-xl font-semibold mb-2 text-gray-800 text-left rounded-xl shadow">All Visitors</h2>
+      <h1 className="font-semibold mb-2 text-gray-800 text-center rounded-xl shadow">Generate Virtual ID cards!!!</h1>
       <Row className="g-4">
         {/* Left Column - Tables */}
         <Col xl={9} lg={8} className="pe-lg-4">
@@ -293,7 +294,7 @@ const GenerateVisitorIDCard = ({ setTitle, visitor, visitorId, showCard = true, 
             <table >
               <thead>
                 <tr>
-                  <th>ID</th>
+                  {/* <th>ID</th> */}
                   <th>Name</th>
                   <th>From</th>
                   <th>To Meet</th>
@@ -306,12 +307,13 @@ const GenerateVisitorIDCard = ({ setTitle, visitor, visitorId, showCard = true, 
                 {currentVisitors.length > 0 ? (
                   currentVisitors.map((v) => (
                     <tr key={v.id} className={current?.id === v.id ? 'table-Accepted' : ''}>
-                      <td className="">
+                      {/* <td className="">
                         <span className="badge bg-light text-dark">#{v.id}</span>
-                      </td>
+                      </td> */}
                       <td className="fw-medium text-start">{v.visitor_name || v.GMS_VisitorName}</td>
                       <td className="">{v.visitor_from || v.GMS_VisitorFrom}</td>
-                      <td className="text-start">{v.to_meet || v.GMS_ToMeet}</td>
+                      <td className="">{v.to_meet_employeename} <br /> <span style={{ fontSize: "12px", color: "#555" }}> Role: {v.emp_designation || v.adm_role_id} </span>
+                      </td>
                       <td className="">
                         <span className={`badge ${v.status === 'Accepted' ? 'bg-success' :
                           v.status === 'Pending' ? 'bg-warning' :
@@ -522,21 +524,38 @@ const GenerateVisitorIDCard = ({ setTitle, visitor, visitorId, showCard = true, 
       {/* QR Modal */}
       {current && (
         <Modal show={showQRModal} onHide={() => setShowQRModal(false)} size="sm" centered>
-          <Modal.Header closeButton>
-            <Modal.Title>Visitor QR Code</Modal.Title>
+          <Modal.Header closeButton className="border-0 pb-0"> {/* Remove border, add padding bottom */}
+            <Modal.Title id="visitor-qr-code-title" className="h5 text-primary fw-bold"> {/* Smaller, primary color, bold title */}
+              Visitor QR Code
+            </Modal.Title>
           </Modal.Header>
-          <Modal.Body className="text-center">
-            <QRCode value={qrCodeData} size={180} level="H" />
-            <p className="mt-3 mb-0">Visitor ID: <strong>{current.id}</strong></p>
-            <p className="text-muted small">{current.visitor_name || current.GMS_VisitorName}</p>
+
+          <Modal.Body className="text-center pt-2 pb-4 px-4"> {/* Adjusted padding */}
+            <div className="qr-code-display p-3 bg-light rounded shadow-sm d-inline-block"> {/* Background, rounded corners, shadow */}
+              {/* Use the correct value for the QR code, e.g., just the ID */}
+              <QRCode
+                value={qrCodeData} // IMPORTANT: Only encode the ID to prevent overflow
+                size={220} // Slightly reduced size for better fit in a 'sm' modal, still highly scannable
+                style={{ height: 'auto', maxWidth: '100%', width: '100%' }}
+                level="H" // High error correction for better scannability even if slightly damaged
+              />
+            </div>
+
+            {/* Visitor Data */}
+            <div className="visitor-details"> {/* Increased top margin */}
+              <p className="mb-1 text-sm text-muted fw-semibold">Visitor ID: <span className="text-dark">{current.id}</span></p> {/* Semi-bold label, dark ID */}
+              <h4 className="text-sm font-weight-bold text-dark mb-0"> {/* Slightly larger, darker name */}
+                {current.visitor_name || current.GMS_VisitorName || 'N/A'}
+              </h4>
+            </div>
           </Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" onClick={() => setShowQRModal(false)}>
+
+          <Modal.Footer className="border-0 pt-0 d-flex justify-content-around"> {/* Remove border, no top padding, space buttons evenly */}
+            <Button variant="outline-secondary" onClick={() => setShowQRModal(false)} className="flex-grow-1 mx-2"> {/* Outline style, grows, horizontal margin */}
               Close
             </Button>
-            <Button variant="primary" onClick={handlePrint}>
-              <BsPrinter className="me-2" />
-              Print
+            <Button variant="primary" onClick={handlePrint} className="flex-grow-1 mx-2"> {/* Grows, horizontal margin */}
+              <i className="fas fa-print me-2"></i> Print
             </Button>
           </Modal.Footer>
         </Modal>

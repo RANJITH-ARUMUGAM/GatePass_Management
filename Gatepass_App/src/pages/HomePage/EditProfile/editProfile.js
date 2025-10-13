@@ -8,10 +8,19 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { SERVER_PORT } from '../../../constant';
 
+function bufferToBase64(buffer) {
+  if (!buffer) return '';
+  if (typeof buffer === 'string') return buffer;
+  if (buffer.data) {
+    return btoa(
+      new Uint8Array(buffer.data).reduce((data, byte) => data + String.fromCharCode(byte), '')
+    );
+  }
+  return '';
+}
 
 const EditProfile = ({ setTitle }) => {
   const loginid = ReactSession.get('username');
-  
   const today = new Date().toISOString().split('T')[0];
   const gender = ['Male', 'Female', 'Others'];
   const navigate = useNavigate();
@@ -19,10 +28,9 @@ const EditProfile = ({ setTitle }) => {
   const [alerts, setAlerts] = useState([]);
   const [userData, setUserData] = useState({});
 
-
   useEffect(() => {
     setTitle('Edit Profile');
-  }, []);
+  }, [setTitle]);
 
   useEffect(() => {
     if (loginid) {
@@ -30,9 +38,9 @@ const EditProfile = ({ setTitle }) => {
         .then(response => {
           const user = response.data;
           setUserData(user);
-          // if (user.adm_users_profileimage) {
-          //   ReactSession.set("profileimage", user.adm_users_profileimage);
-          // }
+          if (user.adm_users_profileimage) {
+            ReactSession.set("profileimage", user.adm_users_profileimage);
+          }
         })
         .catch(error => console.error("Error fetching user data:", error));
     }
@@ -68,159 +76,242 @@ const EditProfile = ({ setTitle }) => {
 
   return (
     <Container fluid className="p-1 m-0">
-      <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-        <Card
-          className="shadow rounded-4 border-0 bg-light"
-          style={{
-            maxWidth: 1000,
-            margin: '10px auto',
-            background: 'rgba(255,255,255,0.95)',
-            backdropFilter: 'blur(2px)'
-          }}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.7, ease: "easeOut" }}
+        style={{
+          width: '100%',
+          minHeight: '100vh',
+          background: 'linear-gradient(135deg, #f5f7fa 0%, #e4efe9 100%)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: '5px 0',
+          fontFamily: "'Poppins', sans-serif"
+        }}
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.2, duration: 0.5 }}
+          style={{ width: '100%', maxWidth: '900px' }}
         >
-          <Card.Body>
-            <Form onSubmit={handleSubmit}>
-              <Row className="g-4">
-                <Col
-                  md={5}
-                  className="border-end"
-                  style={{
-                    background: 'rgba(99,102,241,0.06)',
-                    borderRadius: '18px 0 0 18px',
-                    padding: '14px 12px'
-                  }}
-                >
-                  <div className="text-center mb-2 mt-0">
-                    <div className="position-relative d-inline-block">
+          <Card className="shadow-lg" style={{
+            borderRadius: '16px',
+            background: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(10px)',
+            border: 'none',
+            overflow: 'hidden'
+          }}>
+            <Card.Body style={{ padding: '2rem' }}>
+              <div className="mb-4">
+                <Row className="align-items-center">
+                  <Col xs={12} md={5} className="text-center mb-3 mb-md-0">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.9 }}
+                    >
                       <Image
-                        src={userData.adm_users_profileimage || profilePic}
+                        src={
+                          typeof userData.adm_users_profileimage === "string"
+                            ? userData.adm_users_profileimage
+                            : userData.adm_users_profileimage
+                              ? `data:image/jpeg;base64,${bufferToBase64(userData.adm_users_profileimage)}`
+                              : profilePic
+                        }
                         roundedCircle
-                        width={180}
-                        height={180}
-                        className="border shadow"
-                        alt="Profile"
+                        alt="User Profile"
+                        style={{
+                          width: '220px',
+                          height: '220px',
+                          objectFit: 'cover',
+                          border: '4px solid #fff',
+                          boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
+                        }}
                       />
-                      <div className="position-absolute bottom-0 end-0">
-                        <Button
-                          variant="dark"
-                          size="sm"
-                          className="rounded-circle"
-                          onClick={() => document.getElementById('profileImageInput').click()}
-                        >
-                          <i className="bi bi-upload"></i>
-                        </Button>
-                        <Form.Control
-                          type="file"
-                          id="profileImageInput"
-                          className="d-none"
-                          accept="image/*"
-                          onChange={handleImageChange}
-                        />
+                    </motion.div>
+                  </Col>
+                  <Col xs={12} md={7}>
+                    <motion.h3
+                      className="mb-2"
+                      style={{ fontWeight: '700', color: '#2d3748', fontSize: '1.5rem' }}
+                      initial={{ opacity: 0, x: 30 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.2, duration: 0.5 }}
+                    >
+                      {userData.adm_users_firstname} {userData.adm_users_lastname}
+                    </motion.h3>
+                    <motion.p
+                      className="text-muted mb-2"
+                      style={{ fontSize: '0.95rem', fontWeight: '500' }}
+                      initial={{ opacity: 0, x: 30 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.3, duration: 0.5 }}
+                    >
+                      Login ID: {userData.adm_users_loginid}
+                    </motion.p>
+                    <Form.Control
+                      type="file"
+                      id="profileImageInput"
+                      className="d-none"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                    />
+                    <motion.div
+                      whileHover={{ scale: 1.07 }}
+                      whileTap={{ scale: 0.97 }}
+                      style={{ display: 'inline-block' }}
+                    >
+                      <Button
+                        variant="outline-primary"
+                        size="sm"
+                        className="mt-2"
+                        style={{ background: 'linear-gradient(135deg, #e0e7ff 0%, #1944f1ff 100%)', color: '#3730a3', fontWeight: 600, border: '1.5px solid #6366f1' }}
+                        onClick={() => document.getElementById('profileImageInput').click()}
+                      >
+                        Change Profile Photo
+                      </Button>
+                    </motion.div>
+                  </Col>
+                </Row>
+              </div>
+
+              <Form onSubmit={handleSubmit} style={{ fontSize: '0.6rem' }}>
+                <Row className="g-4">
+                  <Col md={6}>
+                    <motion.div
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.6, duration: 0.5 }}
+                    >
+                      <h5 style={{
+                        color: '#2d3748',
+                        fontWeight: '600',
+                        borderBottom: '2px solid #4299e1',
+                        paddingBottom: '0.5rem',
+                        marginBottom: '1.5rem'
+                      }}>
+                        Personal Details:
+                      </h5>
+                      <Row className="mb-3">
+                        <Col md={6} className="mb-3 mb-md-0">
+                          <Form.Label style={{ fontWeight: '600', color: '#4a5568', fontSize: '0.75rem', marginBottom: '0.1rem' }}>First Name</Form.Label>
+                          <Form.Control type="text" name="adm_users_firstname" value={userData.adm_users_firstname || ''} onChange={handleDataChange} style={{ borderRadius: '8px', padding: '4px 8px', border: '2px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem' }} />
+                        </Col>
+                        <Col md={6}>
+                          <Form.Label style={{ fontWeight: '600', color: '#4a5568', fontSize: '0.75rem', marginBottom: '0.1rem' }}>Last Name</Form.Label>
+                          <Form.Control type="text" name="adm_users_lastname" value={userData.adm_users_lastname || ''} onChange={handleDataChange} style={{ borderRadius: '8px', padding: '4px 8px', border: '2px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem' }} />
+                        </Col>
+                      </Row>
+                      <div className="mb-3">
+                        <Form.Label style={{ fontWeight: '600', color: '#4a5568', fontSize: '0.75rem', marginBottom: '0.1rem' }}>Mobile</Form.Label>
+                        <Form.Control type="text" name="adm_users_mobile" value={userData.adm_users_mobile || ''} onChange={handleDataChange} style={{ borderRadius: '8px', padding: '4px 8px', border: '2px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem' }} />
                       </div>
-                    </div>
-                  </div>
-                  {[
-                    ['Login ID', userData.adm_users_loginid],
-                    ['First Name', userData.adm_users_firstname],
-                    ['Last Name', userData.adm_users_lastname],
-                    ['Mobile', userData.adm_users_mobile],
-                    ['Email', userData.adm_users_email]
-                  ].map(([label, value], idx) => (
-                    <Row key={idx} className="align-items-center mb-1 mt-1">
-                      <Col xs={4} className="text-end fw-bold" style={{ color: '#1d3557', fontSize: '0.95rem' }}>
-                        {label}:
-                      </Col>
-                      <Col xs={8}>
-                        <span style={{
-                          color: 'white',
-                          fontWeight: 500,
-                          backgroundColor: '#a39999',
-                          padding: '2px 8px',
-                          borderRadius: '5px',
-                          display: 'inline-block',
-                          maxWidth: '100%',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          fontSize: '0.95rem'
-                        }}>
-                          {value || '-'}
-                        </span>
-                      </Col>
-                    </Row>
-                  ))}
-                </Col>
+                      <div className="mb-3">
+                        <Form.Label style={{ fontWeight: '600', color: '#4a5568', fontSize: '0.75rem', marginBottom: '0.1rem' }}>Email</Form.Label>
+                        <Form.Control type="email" name="adm_users_email" value={userData.adm_users_email || ''} onChange={handleDataChange} style={{ borderRadius: '8px', padding: '4px 8px', border: '2px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem' }} />
+                      </div>
+                      <div className="mb-3">
+                        <Form.Label style={{ fontWeight: '600', color: '#4a5568', fontSize: '0.75rem', marginBottom: '0.1rem' }}>Gender</Form.Label>
+                        <Form.Control as="select" name="adm_users_gender" value={userData.adm_users_gender || ''} onChange={handleDataChange} style={{ borderRadius: '8px', padding: '4px 8px', border: '2px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem' }}>
+                          <option value="">Select Gender</option>
+                          {gender.map((g) => (<option key={g} value={g}>{g}</option>))}
+                        </Form.Control>
+                      </div>
+                      <div className="mb-3">
+                        <Form.Label style={{ fontWeight: '600', color: '#4a5568', fontSize: '0.75rem', marginBottom: '0.1rem' }}>Date of Birth</Form.Label>
+                        <Form.Control type="date" name="adm_users_dob" value={userData.adm_users_dob || ''} max={today} onChange={handleDataChange} style={{ borderRadius: '8px', padding: '4px 8px', border: '2px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem' }} />
+                      </div>
+                    </motion.div>
+                  </Col>
 
-                <Col md={7} style={{ padding: '5px 5px' }}>
-                  <h5 className="mb-3 fw-bold" style={{ color: '#6366f1', letterSpacing: '0.5px' }}>Personal & Address Details</h5>
-                  {[1, 2, 3].map(n => (
-                    <Form.Group className="mb-2" key={`address${n}`}>
-                      <Form.Label className="fw-bold" style={{ fontSize: '0.97rem' }}>Address Line {n}</Form.Label>
-                      <Form.Control
-                        type="text"
-                        name={`adm_users_address${n}`}
-                        value={userData[`adm_users_address${n}`] || ''}
-                        onChange={handleDataChange}
-                        style={{ fontSize: '0.97rem', borderRadius: 6, padding: '6px 10px' }}
-                        placeholder={`Enter address line ${n}`}
-                      />
-                    </Form.Group>
-                  ))}
-                  <Row>
-                    <Col md={6}>
-                      <Form.Group className="mb-2">
-                        <Form.Label className="fw-bold" style={{ fontSize: '0.97rem' }}>Gender</Form.Label>
-                        <Form.Select
-                          name="adm_users_gender"
-                          value={userData.adm_users_gender || ''}
-                          onChange={handleDataChange}
-                          style={{ fontSize: '0.97rem', borderRadius: 6, padding: '6px 10px' }}
-                        >
-                          <option value="">Select</option>
-                          {gender.map((gen, idx) => (
-                            <option key={idx} value={gen}>{gen}</option>
-                          ))}
-                        </Form.Select>
-                      </Form.Group>
-                    </Col>
-                    <Col md={6}>
-                      <Form.Group className="mb-2">
-                        <Form.Label className="fw-bold" style={{ fontSize: '0.97rem' }}>Date of Birth</Form.Label>
-                        <Form.Control
-                          type="date"
-                          name="adm_users_dob"
-                          value={userData.adm_users_dob || ''}
-                          max={today}
-                          onChange={handleDataChange}
-                          style={{ fontSize: '0.97rem', borderRadius: 6, padding: '6px 10px' }}
-                        />
-                      </Form.Group>
-                    </Col>
-                  </Row>
-                  <div className="d-flex justify-content-end gap-2 mt-3">
-                    <Button className="px-3 py-2" variant="success" type="submit" style={{ fontSize: '1rem', borderRadius: 6 }}>
-                      Save
-                    </Button>
-                    <Button className="px-3 py-2" variant="danger" onClick={back} style={{ fontSize: '1rem', borderRadius: 6 }}>
-                      Cancel
-                    </Button>
-                  </div>
-                </Col>
-              </Row>
-            </Form>
-          </Card.Body>
-        </Card>
+                  <Col md={6}>
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.7, duration: 0.5 }}
+                    >
+                      <h5 style={{
+                        color: '#2d3748',
+                        fontWeight: '600',
+                        borderBottom: '2px solid #4299e1',
+                        paddingBottom: '0.5rem',
+                        marginBottom: '1.5rem'
+                      }}>
+                        Address Details:
+                      </h5>
+                      <Row className="mb-3">
+                        <Col md={6} className="mb-3 mb-md-0">
+                          <Form.Label style={{ fontWeight: '600', color: '#4a5568', fontSize: '0.75rem', marginBottom: '0.1rem' }}>Address Line 1</Form.Label>
+                          <Form.Control type="text" name="adm_users_address1" value={userData.adm_users_address1 || ''} onChange={handleDataChange} style={{ borderRadius: '8px', padding: '4px 8px', border: '2px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem' }} />
+                        </Col>
+                        <Col md={6}>
+                          <Form.Label style={{ fontWeight: '600', color: '#4a5568', fontSize: '0.75rem', marginBottom: '0.1rem' }}>Address Line 2</Form.Label>
+                          <Form.Control type="text" name="adm_users_address2" value={userData.adm_users_address2 || ''} onChange={handleDataChange} style={{ borderRadius: '8px', padding: '4px 8px', border: '2px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem' }} />
+                        </Col>
+                      </Row>
+                      <div className="mb-3">
+                        <Form.Label style={{ fontWeight: '600', color: '#4a5568', fontSize: '0.75rem', marginBottom: '0.1rem' }}>Address Line 3</Form.Label>
+                        <Form.Control type="text" name="adm_users_address3" value={userData.adm_users_address3 || ''} onChange={handleDataChange} style={{ borderRadius: '8px', padding: '4px 8px', border: '2px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem' }} />
+                      </div>
+                      {/* You can add city, state, and postal code fields here if needed */}
+                      <div className="mb-3">
+                        <Form.Label style={{ fontWeight: '600', color: '#4a5568', fontSize: '0.75rem', marginBottom: '0.1rem' }}>City</Form.Label>
+                        <Form.Control type="text" name="adm_users_city" value={userData.adm_users_city || ''} onChange={handleDataChange} style={{ borderRadius: '8px', padding: '4px 8px', border: '2px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem' }} />
+                      </div>
+                      <div className="mb-3">
+                        <Form.Label style={{ fontWeight: '600', color: '#4a5568', fontSize: '0.75rem', marginBottom: '0.1rem' }}>State</Form.Label>
+                        <Form.Control type="text" name="adm_users_state" value={userData.adm_users_state || ''} onChange={handleDataChange} style={{ borderRadius: '8px', padding: '4px 8px', border: '2px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem' }} />
+                      </div>
+                      <div className="mb-3">
+                        <Form.Label style={{ fontWeight: '600', color: '#4a5568', fontSize: '0.75rem', marginBottom: '0.1rem' }}>Postal Code</Form.Label>
+                        <Form.Control type="text" name="adm_users_postalcode" value={userData.adm_users_postalcode || ''} onChange={handleDataChange} style={{ borderRadius: '8px', padding: '4px 8px', border: '2px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem' }} />
+                      </div>
+                    </motion.div>
+                  </Col>
+                </Row>
+                <motion.div
+                  className="d-flex justify-content-end gap-3 mt-4"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.8, duration: 0.5 }}
+                >
+                  <motion.button
+                    whileHover={{ scale: 1.05, boxShadow: "0 6px 16px rgba(0,0,0,0.1)" }}
+                    whileTap={{ scale: 0.98 }}
+                    className="px-4 py-2"
+                    type="submit"
+                    style={{ borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #4299e1 0%, #3182ce 100%)', color: 'white', fontWeight: '600', fontSize: '0.95rem' }}
+                  >
+                    Save
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.05, boxShadow: "0 6px 16px rgba(0,0,0,0.1)" }}
+                    whileTap={{ scale: 0.98 }}
+                    className="px-4 py-2"
+                    onClick={back}
+                    style={{ borderRadius: '8px', border: '2px solid #e53e3e', background: 'transparent', color: '#e53e3e', fontWeight: '600', fontSize: '0.95rem' }}
+                  >
+                    Cancel
+                  </motion.button>
+                </motion.div>
+              </Form>
+            </Card.Body>
+          </Card>
+        </motion.div>
+
+        <div style={{ padding: "20px" }}>
+          {alerts.map((alert) => (
+            <CustomAlert
+              key={alert.id}
+              {...alert}
+              onClose={() => setAlerts((prev) => prev.filter((a) => a.id !== alert.id))}
+            />
+          ))}
+        </div>
       </motion.div>
-
-      <div style={{ padding: "20px" }}>
-        {alerts.map((alert) => (
-          <CustomAlert
-            key={alert.id}
-            {...alert}
-            onClose={() => setAlerts((prev) => prev.filter((a) => a.id !== alert.id))}
-          />
-        ))}
-      </div>
     </Container>
   );
 };

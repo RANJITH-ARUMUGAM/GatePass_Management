@@ -112,21 +112,6 @@ function EditProgramModel({ setTitle }) {
 
     return (
         <div className="Form-page" style={{ minHeight: '91.1vh', backgroundColor: 'rgb(241, 245, 245)', overflowX: 'hidden' }}>
-            {/* Navigation Links Header */}
-            <div style={{ backgroundColor: '#d2edce', marginTop: '15px' }}>
-                <div className="d-flex align-items-center" style={{ minHeight: '40px' }}>
-                    <Link style={{ fontSize: '14px', color: 'black', paddingRight: '8px' }} to='/Home'>Administration</Link>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" style={{ color: '#5D6D7E', margin: '0 4px' }} fill="currentColor" className="bi bi-chevron-right" viewBox="0 0 16 16">
-                        <path fillRule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708" />
-                    </svg>
-                    <Link style={{ fontSize: '14px', color: 'black', paddingRight: '8px', paddingLeft: '4px' }} to="/program">Program</Link>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" style={{ color: '#5D6D7E', margin: '0 4px' }} fill="currentColor" className="bi bi-chevron-right" viewBox="0 0 16 16">
-                        <path fillRule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708" />
-                    </svg>
-                    <span style={{ fontSize: '14px', color: '#73879C', paddingLeft: '4px' }}>Edit Program</span>
-                </div>
-            </div>
-
             <div className="x_panel" style={{
                 minWidth: 600,
                 maxWidth: 900,
