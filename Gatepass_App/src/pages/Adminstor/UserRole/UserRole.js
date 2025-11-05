@@ -255,11 +255,11 @@ function UserRole({ setTitle }) {
                         </table>
                     </div>
                     <div className="d-flex align-items-center" style={{ gap: '12px', marginTop: '16px' }}>
-                        <Button variant="success" type="submit" disabled={!!savebuttondisable}>
+                        <Button variant="success" type="submit" disabled={!!savebuttondisable} size="md" style={{ background: 'linear-gradient(45deg, #1af107a7, #44a706)', minWidth: 90, fontWeight: 500 }}>
                             Save
                         </Button>
                         <Link to="/userrole">
-                            <Button variant="danger" type="button" onClick={handleClear}>
+                            <Button variant="danger" type="button" onClick={handleClear} style={{ background: 'linear-gradient(45deg, #f10707ff, #c90808ff)', marginLeft: "10px", minWidth: 90, fontWeight: 500 }}>
                                 Clear
                             </Button>
                         </Link>

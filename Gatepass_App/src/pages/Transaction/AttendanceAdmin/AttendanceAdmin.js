@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, BarElement, CategoryScale, LinearScale, Tooltip, Legend } from 'chart.js';
-import '../Admin/UserList.css';
+import '../../Adminstor/AdminUsers/UserList.css';
 import { SERVER_PORT } from '../../../constant';
 import { ReactSession } from 'react-client-session';
 

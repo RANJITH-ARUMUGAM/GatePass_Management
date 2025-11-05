@@ -3,10 +3,8 @@ import { Button, Form, Container, Row, Col } from 'react-bootstrap';
 import { FaEdit, FaTrashAlt, FaUserPlus, FaSearch, FaArrowLeft, FaArrowRight } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { PlusCircle, Pen, Trash2 } from 'lucide-react';
 import { motion } from "framer-motion";
 import { SERVER_PORT } from '../../../constant';
-
 import CustomAlert from "../../../CustomAlert";
 
 export default function User({ setTitle }) {
@@ -54,11 +52,11 @@ export default function User({ setTitle }) {
   const displayedUsers = filteredUsers.slice(startIndex, startIndex + recordsPerPage);
 
   const handleEditUser = (user) => {
-    navigate("/user/edituser", { state: { userId: user.adm_users_id } });
+    navigate("/adminUser/AdminEdituser", { state: { userId: user.adm_users_id } });
   };
 
   const handleAddUser = () => {
-    navigate("/user/adduser");
+    navigate("/adminUser/AdminAdduser");
   };
 
   const handleDeleteUser = (user) => {
@@ -87,7 +85,7 @@ export default function User({ setTitle }) {
   };
 
   useEffect(() => {
-    setTitle("Admin List");
+    setTitle("Admin Users");
     fetchAllUsers();
   }, []);
 

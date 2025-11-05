@@ -265,11 +265,11 @@ function RoleProgram({ setTitle }) {
                         </table>
                     </div>
                     <div className="d-flex align-items-center" style={{ gap: '14px', marginTop: '18px' }}>
-                        <Button variant="success" type="submit" disabled={saveButtonDisable} size="md" style={{ minWidth: 100, fontWeight: 500 }}>
+                        <Button variant="success" type="submit" disabled={saveButtonDisable} size="md" style={{ background: 'linear-gradient(45deg, #1af107a7, #44a706)', minWidth: 100, fontWeight: 500 }}>
                             Save
                         </Button>
                         <Link to="/roleprogram">
-                            <Button variant="danger" type="button" onClick={handleClear} style={{ marginLeft: "10px", minWidth: 100, fontWeight: 500 }}>
+                            <Button variant="danger" type="button" onClick={handleClear} style={{ background: 'linear-gradient(45deg, #f10707ff, #c90808ff)', marginLeft: "10px", minWidth: 100, fontWeight: 500 }}>
                                 Clear
                             </Button>
                         </Link>

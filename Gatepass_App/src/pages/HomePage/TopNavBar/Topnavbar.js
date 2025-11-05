@@ -89,13 +89,15 @@ export default function Topnavbar({ isSidenavOpen }) {
 
   // Logout
   const handleLogout = () => {
-    showAlert("info", "Information", "Are you sure you want to Logout?", (isConfirmed) => {
-      if (isConfirmed) {
-        sessionStorage.clear();
-        navigate("/");
-      }
-    });
-  };
+  showAlert("info", "Information", "Are you sure you want to Logout?", (isConfirmed) => {
+    if (isConfirmed) {
+      sessionStorage.clear();
+      navigate("/", { replace: true });
+      window.location.reload();
+    }
+  });
+};
+
 
   // Navigate to Edit Profile
   const handleeditprofile = () => {

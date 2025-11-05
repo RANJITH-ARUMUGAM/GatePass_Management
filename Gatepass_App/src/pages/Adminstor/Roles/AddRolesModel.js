@@ -3,7 +3,6 @@ import React from "react"
 import { useState, useEffect } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { Form, Button, Row, Col } from "react-bootstrap"
-import Searchable from "react-searchable-dropdown";
 import { SERVER_PORT } from '../../../constant';
 import { ReactSession } from 'react-client-session';
 
@@ -14,9 +13,7 @@ function AddRolesModel({ setTitle }) {
     }, []);
 
     const navigate = useNavigate()
-    const [OrganisationBusiness, setOrganisationBusinessValues] = useState([])
     const [OrgIsDisabled, setOrgIsDisabled] = useState()
-    const [Businessunit, setbusinessunitValues] = useState([])
     const [DisplayValues, setDisplayValues] = useState();
 
     const [values, setRoleValues] = useState({
@@ -34,35 +31,16 @@ function AddRolesModel({ setTitle }) {
     useEffect(() => {
         setOrgIsDisabled(true)
         const username = ReactSession.get("username");
-        const selectedfy = ReactSession.get("selectedfy")
         setDisplayValues.DisplayValues = username;
 
         setRoleValues({ ...values, Roles_Created_BY: setDisplayValues.DisplayValues });
         console.log(setDisplayValues.DisplayValues)
-
-        axios.get(`${SERVER_PORT}/Business_active`)
-            .then(res => (setbusinessunitValues(res.data)))
-            .catch(err => console.log(err))
     }, [])
 
 
-    function changeOrganisationIdFilters(e) {
-        setRoleValues({ ...values, Organisation_ID: e.target.value })
-        setRoleValues.Organisation_ID = e.target.value
-    }
 
 
-    function changeBuidFilter(e) {
-        setRoleValues({ ...values, Businessunit_ID: e.target.value })
-        setRoleValues.Businessunit_ID = e.target.value
-        setOrgIsDisabled(false)
-
-        axios.get(`${SERVER_PORT}/organisation_active_business/${setRoleValues.Businessunit_ID}`)
-            .then(res => {
-                setOrganisationBusinessValues(res.data);
-            })
-            .catch(err => console.log(err));
-    };
+    
 
 
 

@@ -12,6 +12,8 @@ const nodemailer = require('nodemailer');
 require("dotenv").config();
 const multer = require('multer');
 const moment = require('moment');
+const CryptoJS = require("crypto-js");
+const AES_SECRET_KEY = "password";
 
 const QRCode = require('qrcode');
 
@@ -40,7 +42,7 @@ const db = new Pool({
   host: process.env.DB_HOST || "localhost",
   user: process.env.DB_USER || "postgres",
   password: process.env.DB_PASSWORD || "5441",
-  database: process.env.DB_NAME || "GMS",
+  database: process.env.DB_NAME || "New_GMS",
   port: process.env.DB_PORT || 5432
 });
 
@@ -59,57 +61,9 @@ transporter.verify((err, success) => {
     console.log('✅ Email transporter is ready to send!');
   }
 });
-
 ////-------------------------------------Login Page Begins Here------------------------------------------------------////
 
 
-// app.post('/user_login', async (req, res) => {
-//   const { username, password } = req.body;
-//   console.log("/login " + username, password);
-
-//   db.query("SELECT * FROM ADM_User_T WHERE ADM_Users_loginid=$1", [username], async (err, results) => {
-//     if (err) {
-//       console.error("Database query error:", err);
-//       res.status(500).send({ success: false, error: "Database error" });
-//     } else {
-//       if (results.rowCount > 0) {
-//         const user = results.rows[0];
-
-//         if (!user.adm_users_status) {
-//           return res.json({
-//             success: false,
-//             message: "Your account is not active. Please contact the administrator.",
-//             status: "inactive"
-//           });
-//         }
-
-//         // Compare entered password with hashed password stored in the database
-//         const isPasswordValid = await bcrypt.compare(password, user.adm_users_password);
-
-//         if (isPasswordValid) {
-//           res.json({
-//             success: true,
-//             message: "Login Successful",
-//             id: user.adm_users_id,
-//             loginid: user.adm_users_loginid,
-//             UserRole: user.adm_users_defaultroleid,
-//             name: `${user.adm_users_firstname} ${user.adm_users_lastname}`,
-//             avatar: user.adm_users_profileimage,
-//           });
-//           console.log("Success");
-//         } else {
-//           res.json({ success: false, message: "Invalid Login Credential" });
-//           console.log("Failed - Incorrect Password");
-//         }
-//       } else {
-//         res.json({ success: false, message: "Invalid Login Credential" });
-//         console.log("Failed - No User");
-//       }
-//     }
-//   });
-// });
-
-// Update your /user_login endpoint to handle profile images
 app.post('/user_login', async (req, res) => {
   const { username, password } = req.body;
   console.log("/login " + username, password);
@@ -121,7 +75,6 @@ app.post('/user_login', async (req, res) => {
     } else {
       if (results.rowCount > 0) {
         const user = results.rows[0];
-
         if (!user.adm_users_status) {
           return res.json({
             success: false,
@@ -130,31 +83,56 @@ app.post('/user_login', async (req, res) => {
           });
         }
 
-        // Compare entered password with hashed password stored in the database
-        const isPasswordValid = await bcrypt.compare(password, user.adm_users_password);
+        let decryptedPassword;
+        try {
+          const bytes = CryptoJS.AES.decrypt(user.adm_users_password, AES_SECRET_KEY);
+          decryptedPassword = bytes.toString(CryptoJS.enc.Utf8);
+        } catch (err) {
+          console.error("Password decryption error:", err);
+          return res.status(500).json({ success: false, message: "Error processing password" });
+        }
 
-        if (isPasswordValid) {
-          // Convert profile image to base64 if it exists
-          let avatar = null;
-          if (user.adm_users_profileimage) {
-            if (user.adm_users_profileimage.type === 'Buffer') {
-              const base64Image = Buffer.from(user.adm_users_profileimage.data).toString('base64');
-              avatar = `data:image/png;base64,${base64Image}`;
-            } else if (typeof user.adm_users_profileimage === 'string') {
-              avatar = user.adm_users_profileimage;
+        if (password === decryptedPassword) {
+          db.query(`SELECT "Roles_RoleName", "Roles_Application"
+                    FROM public.userrole_vw_new 
+                    WHERE "Users_LoginID" = $1 AND "UserRole_Status" = true`,
+            [username],
+            (err2, roleResults) => {
+              if (err2) {
+                console.error("Role fetch error:", err2);
+                return res.status(500).send({ success: false, error: "Role fetch error" });
+              }
+
+              let userRole = null;
+              let userApp = null;
+              if (roleResults.rowCount > 0) {
+                userRole = roleResults.rows[0].Roles_RoleName;
+                userApp = roleResults.rows[0].Roles_Application;
+              }
+
+              let avatar = null;
+              if (user.adm_users_profileimage) {
+                if (user.adm_users_profileimage.type === 'Buffer') {
+                  const base64Image = Buffer.from(user.adm_users_profileimage.data).toString('base64');
+                  avatar = `data:image/png;base64,${base64Image}`;
+                } else if (typeof user.adm_users_profileimage === 'string') {
+                  avatar = user.adm_users_profileimage;
+                }
+              }
+
+              res.json({
+                success: true,
+                message: "Login Successful",
+                id: user.adm_users_id,
+                loginid: user.adm_users_loginid,
+                UserRole: userRole,
+                Application: userApp,
+                name: `${user.adm_users_firstname} ${user.adm_users_lastname}`,
+                avatar: avatar,
+              });
+              console.log("Success - Logged In:", username, "Role:", userRole);
             }
-          }
-
-          res.json({
-            success: true,
-            message: "Login Successful",
-            id: user.adm_users_id,
-            loginid: user.adm_users_loginid,
-            UserRole: user.adm_users_defaultroleid,
-            name: `${user.adm_users_firstname} ${user.adm_users_lastname}`,
-            avatar: avatar,
-          });
-          console.log("Success");
+          );
         } else {
           res.json({ success: false, message: "Invalid Login Credential" });
           console.log("Failed - Incorrect Password");
@@ -166,6 +144,9 @@ app.post('/user_login', async (req, res) => {
     }
   });
 });
+
+
+
 
 ////-------------------------------------Login Page Ends Here------------------------------------------------------////
 
@@ -186,7 +167,6 @@ app.post("/user_signup", async (req, res) => {
         console.log("Data Stored...");
       }
     });
-
 });
 
 app.post('/user_checkemail', async (req, res) => {
@@ -207,14 +187,9 @@ app.post('/user_checkemail', async (req, res) => {
       }
     }
   );
-
 });
-
-
 ////-------------------------------------Signup Page Ends Here------------------------------------------------------////
-
 ////-------------------------------------Admin Page UserList Begins Here------------------------------------------------------////
-
 // 🔹 Fetch All Users
 app.get("/userlist_getalldata", (req, res) => {
   console.log("/userlist_getalldata");
@@ -228,10 +203,8 @@ app.get("/userlist_getalldata", (req, res) => {
   }
   );
 });
-
 // 🔹 Fetch a Single User by ID (Fixed)
 app.get("/userlist_getalldatabyid/:userId", async (req, res) => {
-
   const { userId } = req.params;
   console.log("/userlist_getalldatabyid:" + userId);
   db.query("SELECT * FROM adm_user_t WHERE adm_users_id = $1", [userId],
@@ -251,8 +224,6 @@ app.get("/userlist_getalldatabyid/:userId", async (req, res) => {
       }
     });
 });
-
-
 // Delete a user by ID
 app.delete('/userlist_deleteuser/:userId', (req, res) => {
   const userId = req.params.userId;
@@ -260,49 +231,38 @@ app.delete('/userlist_deleteuser/:userId', (req, res) => {
   if (!userId) {
     return res.status(400).json({ error: "User ID is required" });
   }
-
   const query = `DELETE FROM adm_user_t WHERE adm_users_id = $1`;
-
   db.query(query, [userId], (error, results) => {
     if (error) {
       console.error('Error executing delete query:', error);
       return res.status(500).json({ success: false, message: 'Database error.' });
     }
-
     // Check if any row was deleted
     if (results.rowCount === 0) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
-
     return res.status(200).json({ success: true, message: 'User deleted successfully.' });
   });
 });
-
 //! Edit profile by the user
 app.get('/edit_profile/:loginid', async (req, res) => {
   const loginid = req.params.loginid;
-
   db.query("SELECT * FROM adm_user_t WHERE LOWER(adm_users_loginid) = LOWER($1)", [loginid], (err, result) => {
     if (err) {
       console.error("DB error:", err);
       return res.status(500).json({ success: false, error: "Database error" });
     }
-
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, error: "User not found" });
     }
-
     const user = result.rows[0];
-
     // Convert buffer to base64 string
     if (user.adm_users_profileimage && user.adm_users_profileimage.type === 'Buffer') {
       // Convert the Buffer object to a Base64 string
       const base64Image = Buffer.from(user.adm_users_profileimage.data).toString('base64');
-
       // Prepend the data URI scheme
       user.adm_users_profileimage = `data:image/png;base64,${base64Image}`;
     }
-
     return res.json(user);
   });
 });
@@ -311,9 +271,7 @@ app.get('/edit_profile/:loginid', async (req, res) => {
 app.put('/edit_profile/:mail', async (req, res) => {
   const mail = req.params.mail;
   const updatedData = req.body;
-
   console.log("/edit_profile for:", mail);
-
   let query = `
     UPDATE ADM_User_T SET
       ADM_Users_Address1 = $1,
@@ -324,7 +282,6 @@ app.put('/edit_profile/:mail', async (req, res) => {
       modified_on = CURRENT_DATE,
       modified_by = 'User'
   `;
-
   const params = [
     updatedData.adm_users_address1 || null,
     updatedData.adm_users_address2 || null,
@@ -332,11 +289,9 @@ app.put('/edit_profile/:mail', async (req, res) => {
     updatedData.adm_users_dob || null,
     updatedData.adm_users_gender || null,
   ];
-
   if (updatedData.adm_users_profileimage) {
     try {
       let imageBuffer;
-
       if (typeof updatedData.adm_users_profileimage === "string") {
         // case: base64 string from frontend
         const base64Data = updatedData.adm_users_profileimage.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
@@ -350,37 +305,28 @@ app.put('/edit_profile/:mail', async (req, res) => {
       } else {
         return res.status(400).json({ success: false, error: "Unsupported image format" });
       }
-
       if (!imageBuffer || imageBuffer.length === 0) {
         return res.status(400).json({ success: false, error: "Invalid image data" });
       }
-
       if (imageBuffer.length > 5 * 1024 * 1024) {
         return res.status(400).json({ success: false, error: "Image too large. Maximum 5MB allowed." });
       }
-
       query += `, ADM_Users_ProfileImage = $6::bytea`;
       params.push(imageBuffer);
-
     } catch (err) {
       console.error("Image conversion error:", err);
       return res.status(400).json({ success: false, error: "Invalid image data" });
     }
   }
-
-
   query += ` WHERE LOWER(ADM_Users_LoginID) = LOWER($${params.length + 1})`;
   params.push(mail);
-
   console.log("Executing query:", query);
   console.log("With params:", params);
-
   db.query(query, params, (err, results) => {
     if (err) {
       console.error("Database query error:", err);
       return res.status(500).send({ success: false, error: "Database error" });
     }
-
     if (results.rowCount > 0) {
       console.log("✅ Profile updated successfully");
       return res.json({ success: true, message: "Profile updated successfully" });
@@ -392,20 +338,17 @@ app.put('/edit_profile/:mail', async (req, res) => {
 });
 
 
+
 // app.post('/validate_password', async (req, res) => {
 //   const { email, password } = req.body;
-
 //   try {
 //     const query = 'SELECT adm_users_password FROM adm_user_t WHERE adm_users_loginid = $1';
-//     const result = await pool.query(query, [email]);
-
+//     const result = await db.query(query, [email]);
 //     if (result.rowCount === 0) {
 //       return res.status(404).json({ isValid: false, message: 'User not found' });
 //     }
-
 //     const storedHashedPassword = result.rows[0].adm_users_password;
 //     const isMatch = await bcrypt.compare(password, storedHashedPassword);
-
 //     if (isMatch) {
 //       return res.status(200).json({ isValid: true });
 //     } else {
@@ -417,60 +360,20 @@ app.put('/edit_profile/:mail', async (req, res) => {
 //   }
 // });
 
-// //Change the Password by User
-// const saltRounds = 10;
-
-// app.put('/change_password/:mail', (req, res) => {
-//   const mail = req.params.mail;
-//   const { newPassword } = req.body;
-
-//   console.log("Change password for:", mail);
-
-//   bcrypt.hash(newPassword, saltRounds, (err, hashedPassword) => {
-//     if (err) {
-//       console.error("Hash error:", err);
-//       return res.status(500).json({ success: false, error: 'Error hashing password' });
-//     }
-
-//     const query = `
-//       UPDATE adm_user_t
-//       SET adm_users_password = $1, modified_on = CURRENT_DATE, modified_by = 'System'
-//       WHERE adm_users_loginid = $2
-//     `;
-
-//     db.query(query, [hashedPassword, mail], (err, result) => {
-//       if (err) {
-//         console.error("DB error:", err);
-//         return res.status(500).json({ success: false, error: 'Database error' });
-//       }
-
-//       if (result.rowCount > 0) {
-//         console.log("Password updated successfully for", mail);
-//         return res.status(200).json({ success: true, message: 'Password changed' });
-//       } else {
-//         console.log("No matching user found for", mail);
-//         return res.status(404).json({ success: false, error: "User not found" });
-//       }
-//     });
-//   });
-// });
-
-
 app.post('/validate_password', async (req, res) => {
   const { email, password } = req.body;
-
   try {
     const query = 'SELECT adm_users_password FROM adm_user_t WHERE adm_users_loginid = $1';
-    const result = await pool.query(query, [email]);
-
+    const result = await db.query(query, [email]);
     if (result.rowCount === 0) {
       return res.status(404).json({ isValid: false, message: 'User not found' });
     }
 
-    const storedHashedPassword = result.rows[0].adm_users_password;
-    const isMatch = await bcrypt.compare(password, storedHashedPassword);
+    const storedEncrypted = result.rows[0].adm_users_password;
+    const bytes = CryptoJS.AES.decrypt(storedEncrypted, AES_SECRET_KEY);
+    const decryptedPassword = bytes.toString(CryptoJS.enc.Utf8);
 
-    if (isMatch) {
+    if (password === decryptedPassword) {
       return res.status(200).json({ isValid: true });
     } else {
       return res.status(401).json({ isValid: false, message: 'Invalid password' });
@@ -481,44 +384,66 @@ app.post('/validate_password', async (req, res) => {
   }
 });
 
-// Endpoint to change the password
+// app.put('/change_password/:mail', (req, res) => {
+//   const mail = req.params.mail;
+//   const { newPassword } = req.body;
+//   bcrypt.hash(newPassword, saltRounds, (err, hashedPassword) => {
+//     if (err) {
+//       console.error("Hash error:", err);
+//       return res.status(500).json({ success: false, error: 'Error hashing password' });
+//     }
+//     const query = `
+//       UPDATE adm_user_t
+//       SET adm_users_password = $1, modified_on = CURRENT_DATE, modified_by = 'System'
+//       WHERE adm_users_loginid = $2
+//     `;
+//     db.query(query, [hashedPassword, mail], (err, result) => {
+//       if (err) {
+//         console.error("DB error:", err);
+//         return res.status(500).json({ success: false, error: 'Database error' });
+//       }
+//       if (result.rowCount > 0) {
+//         return res.status(200).json({ success: true, message: 'Password changed' });
+//       } else {
+//         return res.status(404).json({ success: false, error: "User not found" });
+//       }
+//     });
+//   });
+// });
+
 app.put('/change_password/:mail', (req, res) => {
   const mail = req.params.mail;
   const { newPassword } = req.body;
 
-  bcrypt.hash(newPassword, saltRounds, (err, hashedPassword) => {
-    if (err) {
-      console.error("Hash error:", err);
-      return res.status(500).json({ success: false, error: 'Error hashing password' });
-    }
+  try {
+    const encryptedPassword = CryptoJS.AES.encrypt(newPassword, AES_SECRET_KEY).toString();
 
     const query = `
       UPDATE adm_user_t
       SET adm_users_password = $1, modified_on = CURRENT_DATE, modified_by = 'System'
       WHERE adm_users_loginid = $2
     `;
-
-    pool.query(query, [hashedPassword, mail], (err, result) => {
+    db.query(query, [encryptedPassword, mail], (err, result) => {
       if (err) {
         console.error("DB error:", err);
         return res.status(500).json({ success: false, error: 'Database error' });
       }
-
       if (result.rowCount > 0) {
         return res.status(200).json({ success: true, message: 'Password changed' });
       } else {
         return res.status(404).json({ success: false, error: "User not found" });
       }
     });
-  });
+  } catch (err) {
+    console.error("Encryption error:", err);
+    res.status(500).json({ success: false, error: "Error encrypting password" });
+  }
 });
-
 
 ////-------------------------------------Admin Page UserList Ends Here------------------------------------------------------////
 
 ////-------------------------------------User Page EditUser Begins Here------------------------------------------------------////
 
-// Add a New User by Admin
 // app.post("/userlist_adduser", (req, res) => {
 //   const {
 //     adm_users_loginid, adm_users_password, adm_users_email, adm_users_title, adm_users_firstname, adm_users_lastname, adm_users_mobile,
@@ -526,46 +451,47 @@ app.put('/change_password/:mail', (req, res) => {
 //     adm_users_phoneextn, adm_users_deptid, adm_users_jobid, adm_users_positionid, adm_users_islocked,
 //     adm_users_status, created_by, adm_users_defaultroleid
 //   } = req.body;
-
 //   console.log("/userlist_adduser");
 //   // Check for required fields
-//   if (!adm_users_loginid || !adm_users_email || !adm_users_firstname) {
+//   if (!adm_users_loginid || !adm_users_password || !adm_users_email || !adm_users_firstname) {
 //     res.status(400).json({ error: "Required fields are missing." });
 //     return;
 //   }
-
-//   const query = `
-//     INSERT INTO adm_user_t (
-//       adm_users_loginid, adm_users_password, adm_users_email, adm_users_title, adm_users_firstname, adm_users_lastname, adm_users_mobile,
-//       adm_users_gender, adm_users_dob, adm_users_address1, adm_users_address2, adm_users_address3,
-//       adm_users_deptid, adm_users_jobid, adm_users_positionid, adm_users_phoneextn, adm_users_islocked,
-//       adm_users_status, created_on, created_by, adm_users_defaultroleid
-//     ) VALUES (
-//       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, CURRENT_DATE, $19, $20
-//     )
-//   `;
-
-//   const values = [
-//     adm_users_loginid, adm_users_password, adm_users_email, adm_users_title, adm_users_firstname, adm_users_lastname, adm_users_mobile,
-//     adm_users_gender, adm_users_dob, adm_users_address1, adm_users_address2, adm_users_address3,
-//     adm_users_deptid, adm_users_jobid, adm_users_positionid, adm_users_phoneextn,
-//     adm_users_islocked === true ? true : false,
-//     adm_users_status === true ? true : false,
-//     created_by,
-//     adm_users_defaultroleid
-//   ];
-
-//   db.query(query, values, (err) => {
+//   // Hash the password before saving
+//   bcrypt.hash(adm_users_password, 10, (err, hash) => {
 //     if (err) {
-//       console.error("Database Error:", err);
-//       res.status(500).json({ error: "Error adding user." });
-//     } else {
-//       res.status(200).json({ message: "User added successfully." });
+//       console.error("Password hashing error:", err);
+//       return res.status(500).json({ error: "Error processing password." });
 //     }
+//     const query = `
+//       INSERT INTO adm_user_t (
+//         adm_users_loginid, adm_users_password, adm_users_email, adm_users_title, adm_users_firstname, adm_users_lastname, adm_users_mobile,
+//         adm_users_gender, adm_users_dob, adm_users_address1, adm_users_address2, adm_users_address3,
+//         adm_users_deptid, adm_users_jobid, adm_users_positionid, adm_users_phoneextn, adm_users_islocked,
+//         adm_users_status, created_on, created_by, adm_users_defaultroleid
+//       ) VALUES (
+//         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, CURRENT_DATE, $19, $20
+//       )
+//     `;
+//     const values = [
+//       adm_users_loginid, hash, adm_users_email, adm_users_title, adm_users_firstname, adm_users_lastname, adm_users_mobile,
+//       adm_users_gender, adm_users_dob, adm_users_address1, adm_users_address2, adm_users_address3,
+//       adm_users_deptid, adm_users_jobid, adm_users_positionid, adm_users_phoneextn,
+//       adm_users_islocked === true,
+//       adm_users_status === true,
+//       created_by,
+//       adm_users_defaultroleid
+//     ];
+//     db.query(query, values, (err) => {
+//       if (err) {
+//         console.error("Database Error:", err);
+//         res.status(500).json({ error: "Error adding user." });
+//       } else {
+//         res.status(200).json({ message: "User added successfully." });
+//       }
+//     });
 //   });
 // });
-
-// Add a New User by Admin with encrypted password
 
 app.post("/userlist_adduser", (req, res) => {
   const {
@@ -574,21 +500,15 @@ app.post("/userlist_adduser", (req, res) => {
     adm_users_phoneextn, adm_users_deptid, adm_users_jobid, adm_users_positionid, adm_users_islocked,
     adm_users_status, created_by, adm_users_defaultroleid
   } = req.body;
-
   console.log("/userlist_adduser");
 
-  // Check for required fields
   if (!adm_users_loginid || !adm_users_password || !adm_users_email || !adm_users_firstname) {
     res.status(400).json({ error: "Required fields are missing." });
     return;
   }
 
-  // Hash the password before saving
-  bcrypt.hash(adm_users_password, 10, (err, hash) => {
-    if (err) {
-      console.error("Password hashing error:", err);
-      return res.status(500).json({ error: "Error processing password." });
-    }
+  try {
+    const encryptedPassword = CryptoJS.AES.encrypt(adm_users_password, AES_SECRET_KEY).toString();
 
     const query = `
       INSERT INTO adm_user_t (
@@ -600,9 +520,8 @@ app.post("/userlist_adduser", (req, res) => {
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, CURRENT_DATE, $19, $20
       )
     `;
-
     const values = [
-      adm_users_loginid, hash, adm_users_email, adm_users_title, adm_users_firstname, adm_users_lastname, adm_users_mobile,
+      adm_users_loginid, encryptedPassword, adm_users_email, adm_users_title, adm_users_firstname, adm_users_lastname, adm_users_mobile,
       adm_users_gender, adm_users_dob, adm_users_address1, adm_users_address2, adm_users_address3,
       adm_users_deptid, adm_users_jobid, adm_users_positionid, adm_users_phoneextn,
       adm_users_islocked === true,
@@ -619,41 +538,71 @@ app.post("/userlist_adduser", (req, res) => {
         res.status(200).json({ message: "User added successfully." });
       }
     });
-  });
+  } catch (err) {
+    console.error("Encryption error:", err);
+    res.status(500).json({ error: "Error encrypting password." });
+  }
 });
 
+// app.put("/userlist_changepassword/:id", async (req, res) => {
+//   const userId = req.params.id;
+//   const { newPassword } = req.body;
+//   const currentUserRole = req.session.user.role; // Example using a session
+//   if (currentUserRole !== 'Administrator') {
+//     return res.status(403).json({ success: false, error: "Access denied. Only Administrators can change passwords." });
+//   }
+//   if (!newPassword) {
+//     return res.status(400).json({ error: "New password is required." });
+//   }
+//   try {
+//     const hashedPassword = await bcrypt.hash(newPassword, 10);
+//     const query = `
+//           UPDATE adm_user_t
+//           SET adm_users_password = $1, modified_on = CURRENT_DATE
+//           WHERE adm_users_id = $2
+//           RETURNING *;
+//       `;
+//     const values = [hashedPassword, userId];
+//     db.query(query, values, (err, result) => {
+//       if (err) {
+//         console.error("Database Error:", err);
+//         return res.status(500).json({ error: "Error updating password." });
+//       } else {
+//         if (result.rowCount === 0) {
+//           return res.status(404).json({ success: false, error: "User not found" });
+//         } else {
+//           res.status(200).json({ success: true, message: "Password updated successfully." });
+//         }
+//       }
+//     });
+//   } catch (error) {
+//     console.error("Error hashing password:", error);
+//     res.status(500).json({ error: "Error processing password." });
+//   }
+// });
 
-// Update a User's Password - New Endpoint (Secure Version)
 app.put("/userlist_changepassword/:id", async (req, res) => {
   const userId = req.params.id;
   const { newPassword } = req.body;
+  const currentUserRole = req.session.user.role;
 
-  // CRITICAL SECURITY STEP:
-  // You must implement a proper authentication and authorization check here.
-  // Do NOT trust the client to send the user's role.
-  // Instead, get the current user's role from your session, JWT, or other trusted source.
-  const currentUserRole = req.session.user.role; // Example using a session
   if (currentUserRole !== 'Administrator') {
     return res.status(403).json({ success: false, error: "Access denied. Only Administrators can change passwords." });
   }
-
   if (!newPassword) {
     return res.status(400).json({ error: "New password is required." });
   }
 
   try {
-    // Hash the new password
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const encryptedPassword = CryptoJS.AES.encrypt(newPassword, AES_SECRET_KEY).toString();
 
     const query = `
-          UPDATE adm_user_t
-          SET adm_users_password = $1, modified_on = CURRENT_DATE
-          WHERE adm_users_id = $2
-          RETURNING *;
-      `;
-
-    const values = [hashedPassword, userId];
-
+      UPDATE adm_user_t
+      SET adm_users_password = $1, modified_on = CURRENT_DATE
+      WHERE adm_users_id = $2
+      RETURNING *;
+    `;
+    const values = [encryptedPassword, userId];
     db.query(query, values, (err, result) => {
       if (err) {
         console.error("Database Error:", err);
@@ -667,36 +616,29 @@ app.put("/userlist_changepassword/:id", async (req, res) => {
       }
     });
   } catch (error) {
-    console.error("Error hashing password:", error);
+    console.error("Error encrypting password:", error);
     res.status(500).json({ error: "Error processing password." });
   }
 });
 
-// Update a User by Admin (Fixed)
 app.put("/userlist_editusers/:id", async (req, res) => {
   const userId = req.params.id;
   const updatedData = req.body;
-
-  // The password field should not be in the updatedData object for this route.
   if (updatedData.adm_users_password) {
     delete updatedData.adm_users_password;
   }
-
   console.log("/userlist_editusers : " + userId);
   const fields = Object.keys(updatedData)
     .map((key, index) => `${key} = $${index + 1}`)
     .join(", ");
-
   const values = Object.values(updatedData);
   values.push(userId);
-
   const query = `
     UPDATE adm_user_t
     SET ${fields}
     WHERE adm_users_id = $${values.length}
     RETURNING *;
   `;
-
   db.query(query, values, (err, result) => {
     if (err) {
       console.error("Database Error:", err);
@@ -713,11 +655,9 @@ app.put("/userlist_editusers/:id", async (req, res) => {
 
 ////-------------------------------------User Page EditUser Ends Here------------------------------------------------------////
 
-
 ////-------------------------------------MetaData Page Starts Here------------------------------------------------------////
 
 app.get('/metadata_Detail', (req, res) => {
-  //const { headerID } = req.params; 
   console.log('MetaData Details');
   db.query("select GEN_Metadtl_ID,GEN_Metahdr_ID,GEN_Metadtl_Value1,GEN_Metadtl_Value2,GEN_Metadtl_Value3,GEN_Metadtl_Value4,GEN_Metadtl_Value5,GEN_Metadtl_Value6,GEN_Metadtl_Value7,GEN_Metadtl_Value8,GEN_Metadtl_Status from GEN_MetadataDtl_T",
     (err, result) => {
@@ -729,11 +669,9 @@ app.get('/metadata_Detail', (req, res) => {
         res.status(200).json({ success: true, data: result.rows });
     }
   )
-
 });
 
 app.post('/metadata_Header', (req, res) => {
-
   console.log('MetaData Header')
   const {
     GEN_Metahdr_ID,
@@ -741,11 +679,9 @@ app.post('/metadata_Header', (req, res) => {
     GEN_Metahdr_CategoryName,
     GEN_Metahdr_Status,
   } = req.body;
-
   const metahdrquery = `INSERT INTO gen_metadatahdr_t
     (GEN_Metahdr_ID,GEN_Metahdr_Category,GEN_Metahdr_CategoryName,GEN_Metahdr_Status,created_on, created_by) 
     VALUES ($1,$2,$3,$4,CURRENT_DATE,'Admin')`;
-
   db.query(metahdrquery, [GEN_Metahdr_ID, GEN_Metahdr_Category, GEN_Metahdr_CategoryName, GEN_Metahdr_Status],
     (err, result) => {
       if (err) {
@@ -759,7 +695,6 @@ app.post('/metadata_Header', (req, res) => {
 });
 
 app.post('/metadata_Details', (req, res) => {
-
   console.log('MetaData Details')
   const {
     GEN_Metadtl_ID,
@@ -774,9 +709,7 @@ app.post('/metadata_Details', (req, res) => {
     GEN_Metadtl_Value8,
     GEN_Metadtl_Status,
   } = req.body;
-
   const query = "INSERT INTO GEN_MetadataDtl_T (GEN_Metadtl_ID,GEN_Metahdr_ID,GEN_Metadtl_Value1,GEN_Metadtl_Value2,GEN_Metadtl_Value3,GEN_Metadtl_Value4,GEN_Metadtl_Value5,GEN_Metadtl_Value6,GEN_Metadtl_Value7,GEN_Metadtl_Value8,GEN_Metadtl_Status,created_on, created_by) VALUES ($1,$2,$3,$4, $5,$6, $7, $8, $9, $10,$11,CURRENT_DATE,'Admin')";
-
   db.query(query, [
     GEN_Metadtl_ID,
     GEN_Metahdr_ID,
@@ -801,13 +734,9 @@ app.post('/metadata_Details', (req, res) => {
   );
 });
 ////-------------------------------------MetaData Page Ends Here------------------------------------------------------////
-
-
 ////-------------------------------------Visitor Details Starts Here------------------------------------------------------////
 app.use(bodyParser.json({ limit: '10mb' }));
-
 // app.post('/visitor_lobbyentry', (req, res) => {
-
 //   console.log('Lobby Entry')
 //   try {
 //     const {
@@ -822,23 +751,18 @@ app.use(bodyParser.json({ limit: '10mb' }));
 //       email,
 //       image,
 //     } = req.body;
-
 //     if (!image) {
 //       return res.status(400).json({ success: false, message: 'Image is missing in request body' });
 //     }
-
 //     const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
 //     const fileName = `${visitorId}_${name}.png`;
 //     const filePath = path.join(__dirname, '../gatepass_app/public/lobbyentry', fileName);
-
 //     fs.writeFile(filePath, base64Data, 'base64', (err) => {
 //       if (err) return res.status(500).send('Failed to save image');
 //       // continue after saving...
 //     });
-
 //     const inTime = new Date().toLocaleTimeString();
 //     const outTime = '';
-
 //     const insertQuery = `
 //       INSERT INTO "GMS_LobbyEntry_T" (
 //         "GMS_LobbyEntry_ID", "GMS_VisitorName", "GMS_VisitorFrom", "GMS_ToMeet", "GMS_VisitPurpose", 
@@ -852,7 +776,6 @@ app.use(bodyParser.json({ limit: '10mb' }));
 //         CURRENT_DATE, 'Admin'
 //       )
 //     `;
-
 //     db.query(insertQuery, [
 //       parseInt(visitorId),
 //       name,
@@ -868,9 +791,7 @@ app.use(bodyParser.json({ limit: '10mb' }));
 //       fileName,
 //       true
 //     ]);
-
 //     res.status(200).json({ success: true, message: 'Data inserted', id: visitorId });
-
 //   } catch (error) {
 //     console.error('Error inserting visitor data:', error);
 //     res.status(500).json({ success: false, error: 'Server error' });
@@ -895,7 +816,6 @@ app.post('/visitorgateentry', async (req, res) => {
       GMS_Status = 'Pending',
       created_by = 'system'
     } = req.body;
-
     // Validate required fields
     if (!GMS_VisitorName?.trim()) {
       return res.status(400).json({ success: false, message: 'Visitor name is required' });
@@ -906,11 +826,9 @@ app.post('/visitorgateentry', async (req, res) => {
     if (!GMS_VisitorImage) {
       return res.status(400).json({ success: false, message: 'Visitor image is required' });
     }
-
     // Process image - remove data URL prefix if present
     const base64Data = GMS_VisitorImage.replace(/^data:image\/\w+;base64,/, '');
     const imageBuffer = Buffer.from(base64Data, 'base64');
-
     const insertQuery = `
       INSERT INTO gms_gate_entries (
         GMS_VisitorName,
@@ -932,7 +850,6 @@ app.post('/visitorgateentry', async (req, res) => {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NUll)
       RETURNING GMS_GateEntry_ID;
     `;
-
     const values = [
       GMS_VisitorName.trim(),
       GMS_VisitorFrom?.trim() || null,
@@ -949,9 +866,7 @@ app.post('/visitorgateentry', async (req, res) => {
       GMS_Status,
       created_by
     ];
-
     const result = await db.query(insertQuery, values);
-
     res.status(201).json({
       success: true,
       message: 'Visitor entry created successfully',
@@ -970,13 +885,10 @@ app.post('/visitorgateentry', async (req, res) => {
 
 app.post('/sendVisitorIDEmail', async (req, res) => {
   const { email, visitor } = req.body;
-
   console.log('Email request received:', { email, visitor });
-
   if (!email || !visitor) {
     return res.status(400).json({ message: 'Email and visitor details are required.' });
   }
-
   try {
     // 1. Generate QR code as buffer (instead of DataURL)
     const qrData = {
@@ -991,42 +903,32 @@ app.post('/sendVisitorIDEmail', async (req, res) => {
       time: visitor.time,
     };
     const qrBuffer = await QRCode.toBuffer(JSON.stringify(qrData));
-
     // 2. Fetch visitor image from DB
     const imageResult = await db.query(
       'SELECT gms_visitorimage FROM gms_gate_entries WHERE GMS_GateEntry_ID = $1',
       [visitor.id]
     );
-
     if (!imageResult.rows.length || !imageResult.rows[0].gms_visitorimage) {
       return res.status(404).json({ message: 'Visitor image not found in database.' });
     }
-
     const imageBuffer = imageResult.rows[0].gms_visitorimage;
-
     // Detect MIME type (JPG/PNG)
     const isJPEG = imageBuffer[0] === 0xFF && imageBuffer[1] === 0xD8;
     const mimeType = isJPEG ? 'image/jpeg' : 'image/png';
-
     // Base64 for debug if needed
     const base64Image = `data:${mimeType};base64,${imageBuffer.toString('base64')}`;
-
     // 3. Compose HTML email (photo + QR use cid)
     const html = `
       <div style="display: flex; gap: 20px; justify-content: center; font-family: Arial, sans-serif; padding: 20px;">
-
         <!-- FRONT SIDE -->
         <div style="width: 300px; height: 450px; border: 2px solid #2c3e50; border-radius: 10px; overflow: hidden; position: relative; background: white; color: black; padding: 0; box-sizing: border-box;">
-
           <div style="background: #1d4ed8; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center;">
             <h3 style="margin: 0; font-size: 1rem; font-weight: 700; color: white;">COMPANY</h3>
             <span style="background: #22c55e; color: white; padding: 4px 10px; border-radius: 20px; font-size: 0.65rem; font-weight: 700;">VISITOR</span>
           </div>
-
           <div style="display: flex; justify-content: center; align-items: center; margin: 3px; width: 100%;">
             <img src="cid:visitorphoto_${visitor.id}" alt="Visitor" style="width: 125px; height: 125px; border-radius: 50%; border: 2px solid green; object-fit: cover;" />
           </div>
-
           <div style="font-size: 0.85rem; line-height: 1;">
             <p><strong>ID:</strong> ${visitor.id}</p>
             <p><strong>Name:</strong> ${visitor.name}</p>
@@ -1036,31 +938,24 @@ app.post('/sendVisitorIDEmail', async (req, res) => {
             <p><strong>Time In:</strong> ${visitor.time}</p>
             <p><strong>Address:</strong> Company name 1/40, 1st street, Guindy, Chennai-68.</p>
           </div>
-
           <div style="position: absolute; bottom: 0; width: 100%; background: #1ec534; text-align: center; padding: 6px; font-weight: bold; font-size: 0.85rem; border-top: 1px solid #e2e8f0;">
             Valid ${visitor.date}
           </div>
         </div>
-
         <!-- BACK SIDE -->
         <div style="width: 300px; height: 450px; border: 2px solid #2c3e50; border-radius: 10px; background: white; display: flex; flex-direction: column; align-items: center; padding: 20px; box-sizing: border-box;">
-
           <div style="text-align: center; margin-top: 40px;">
             <img src="cid:visitorqr_${visitor.id}" alt="QR Code" style="width: 160px; height: 160px; margin-bottom: 12px; border: 1px solid #22c55e; padding: 5px; border-radius: 10px;" />
             <p style="font-size: 1rem; margin: 10px 0 0; width: 100%;">Scan this code for visitor details</p>
           </div>
-
           <div style="margin-top: auto; text-align: center; width: 100%; font-size: 0.75rem; color: #1e293b;">
             <p><strong>In case of emergency, please contact:</strong></p>
             <p>Security: +1 234 567 8900</p>
           </div>
         </div>
-
       </div>
     `;
-
     console.log('Attempting to send email to:', email);
-
     // 4. Send visitor email
     const mailOptions = {
       from: process.env.EMAIL_USER,
@@ -1080,10 +975,8 @@ app.post('/sendVisitorIDEmail', async (req, res) => {
         }
       ]
     };
-
     const result = await transporter.sendMail(mailOptions);
     console.log('Visitor email sent successfully:', result.messageId);
-
     // ✅ Notify employee also
     if (visitor.toMeetEmail) {
       const employeeMailOptions = {
@@ -1100,7 +993,6 @@ app.post('/sendVisitorIDEmail', async (req, res) => {
           <p>Regards,<br/>Security Desk</p>
         `
       };
-
       try {
         const empResult = await transporter.sendMail(employeeMailOptions);
         console.log('Employee notification email sent:', empResult.messageId);
@@ -1108,12 +1000,10 @@ app.post('/sendVisitorIDEmail', async (req, res) => {
         console.error('Failed to send employee notification email:', err);
       }
     }
-
     res.status(200).json({
       message: 'Visitor ID Card emailed successfully to visitor (and employee notified if applicable).',
       messageId: result.messageId
     });
-
   } catch (error) {
     console.error('Error sending visitor ID email:', error);
     res.status(500).json({
@@ -1127,9 +1017,7 @@ app.post('/sendVisitorIDEmail', async (req, res) => {
 
 app.post('/sendEmail', async (req, res) => {
   const { from, to, cc, bcc, subject, html } = req.body;
-
   console.log("📨 /sendEmail request:", { from, to, cc, bcc, subject });
-
   // Build email options (conditionally include bcc)
   const mailOptions = {
     from,
@@ -1139,7 +1027,6 @@ app.post('/sendEmail', async (req, res) => {
     html,
     ...(bcc && { bcc }) // Add bcc only if provided
   };
-
   try {
     const info = await transporter.sendMail(mailOptions);
     console.log("✅ Email sent:", info.response);
@@ -1153,18 +1040,14 @@ app.post('/sendEmail', async (req, res) => {
 const generateOTP = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
-
-
 // Send OTP
 app.post('/sendEmailOTP', async (req, res) => {
   const { email } = req.body;
   if (!email) {
     return res.status(400).json({ message: 'Email is required' });
   }
-
   const otp = generateOTP();
   const otpExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
-
   try {
     const result = await db.query(
       `
@@ -1179,19 +1062,16 @@ app.post('/sendEmailOTP', async (req, res) => {
       `,
       [email, otp, otpExpires]
     );
-
     // If no row was inserted or updated, email does not exist in adm_user_t
     if (result.rowCount === 0) {
       return res.status(404).json({ message: 'Email not found in user records' });
     }
-
     await transporter.sendMail({
       from: process.env.EMAIL,
       to: email,
       subject: 'Your OTP Code',
       text: `Your OTP is ${otp}. It expires in 15 minutes.`,
     });
-
     res.status(200).json({ message: 'OTP sent successfully' });
   } catch (err) {
     console.error('Error in /sendEmailOTP:', err);
@@ -1199,18 +1079,15 @@ app.post('/sendEmailOTP', async (req, res) => {
   }
 });
 
-
 // Verify OTP
 app.post('/verify-otp', async (req, res) => {
   const { email, otp } = req.body;
   if (!email || !otp) return res.status(400).json({ message: 'Email and OTP are required' });
-
   try {
     const result = await db.query(
       'SELECT * FROM GMS_OTP WHERE email = $1 AND otp = $2 AND otp_expires > NOW()',
       [email, otp]
     );
-
     if (result.rows.length > 0) {
       const token = jwt.sign({ email }, process.env.JWT_SECRET, { expiresIn: '15m' });
       res.json({ token });
@@ -1223,30 +1100,51 @@ app.post('/verify-otp', async (req, res) => {
   }
 });
 
-// Reset Password
+// app.post('/reset-password', async (req, res) => {
+//   const { token, newPassword } = req.body;
+//   if (!token || !newPassword) {
+//     return res.status(400).json({ message: 'Token and password required' });
+//   }
+//   try {
+//     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+//     const hashedPassword = await bcrypt.hash(newPassword, 10);
+//     // Update password in adm_user_t
+//     const result = await db.query(
+//       `UPDATE adm_user_t 
+//        SET adm_users_password = $1, modified_on = NOW() 
+//        WHERE adm_users_email = $2 
+//        RETURNING adm_users_id`,
+//       [hashedPassword, decoded.email]
+//     );
+//     if (result.rowCount === 0) {
+//       return res.status(404).json({ message: 'User not found with this email' });
+//     }
+//     res.status(200).json({ message: 'Password updated successfully' });
+//   } catch (error) {
+//     console.error('Reset error:', error);
+//     res.status(400).json({ message: 'Invalid or expired token' });
+//   }
+// });
+
 app.post('/reset-password', async (req, res) => {
   const { token, newPassword } = req.body;
   if (!token || !newPassword) {
     return res.status(400).json({ message: 'Token and password required' });
   }
-
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const encryptedPassword = CryptoJS.AES.encrypt(newPassword, AES_SECRET_KEY).toString();
 
-    // Update password in adm_user_t
     const result = await db.query(
       `UPDATE adm_user_t 
        SET adm_users_password = $1, modified_on = NOW() 
        WHERE adm_users_email = $2 
        RETURNING adm_users_id`,
-      [hashedPassword, decoded.email]
+      [encryptedPassword, decoded.email]
     );
-
     if (result.rowCount === 0) {
       return res.status(404).json({ message: 'User not found with this email' });
     }
-
     res.status(200).json({ message: 'Password updated successfully' });
   } catch (error) {
     console.error('Reset error:', error);
@@ -1255,18 +1153,14 @@ app.post('/reset-password', async (req, res) => {
 });
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 // // -------------------- Visitor OTP APIs --------------------
-
 // // Send OTP for Visitor Entry
 // app.post('/sendVisitorOTP', async (req, res) => {
 //   console.log("Request Body:", req.body);
 //   const { email } = req.body;
 //   if (!email) return res.status(400).json({ message: 'Email is required' });
-
 //   const otp = generateOTP();
 //   const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes validity
-
 //   try {
 //     // Save or update OTP in visitor table
 //     await db.query(
@@ -1277,7 +1171,6 @@ app.post('/reset-password', async (req, res) => {
 //       `,
 //       [email, otp, otpExpires]
 //     );
-
 //     // Send email with OTP
 //     await transporter.sendMail({
 //       from: process.env.EMAIL,
@@ -1285,27 +1178,23 @@ app.post('/reset-password', async (req, res) => {
 //       subject: 'Visitor Verification OTP',
 //       text: `Your OTP is ${otp}. It will expire in 10 minutes.`,
 //     });
-
 //     res.status(200).json({ message: 'Visitor OTP sent successfully' });
 //   } catch (err) {
 //     console.error('Error in /sendVisitorOTP:', err);
 //     res.status(500).json({ message: 'Error sending Visitor OTP' });
 //   }
 // });
-
 // // Verify Visitor OTP
 // app.post('/verifyVisitorOTP', async (req, res) => {
 //   const { email, otp } = req.body;
 //   if (!email || !otp) {
 //     return res.status(400).json({ success: false, message: 'Email and OTP are required' });
 //   }
-
 //   try {
 //     const result = await db.query(
 //       'SELECT * FROM GMS_Visitor_OTP WHERE email = $1 AND otp = $2 AND otp_expires > NOW()',
 //       [email, otp]
 //     );
-
 //     if (result.rows.length > 0) {
 //       return res.status(200).json({ success: true, message: 'Visitor OTP verified successfully' });
 //     } else {
@@ -1317,11 +1206,7 @@ app.post('/reset-password', async (req, res) => {
 //   }
 // });
 // //////////////////////////////////////////////////////////////////////  visitors Email OTP //////////////
-
-
 // //////////////////////////////////////////////////////////////////////  visitors SMS  OTP //////////////
-
-
 // // Send OTP for Visitor Entry via SMS
 // app.post('/sendVisitorSmsOTP', async (req, res) => {
 //   console.log("Request Body:", req.body);
@@ -1329,10 +1214,8 @@ app.post('/reset-password', async (req, res) => {
 //   if (!phone) {
 //     return res.status(400).json({ message: 'Phone number is required' });
 //   }
-
 //   const otp = generateOTP();
 //   const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes validity
-
 //   try {
 //     // Save or update OTP in a new visitor_sms_otp table
 //     // Ensure you have a 'GMS_Visitor_Sms_OTP' table with columns: 'phone' (primary key), 'otp', 'otp_expires'.
@@ -1344,31 +1227,26 @@ app.post('/reset-password', async (req, res) => {
 //       `,
 //       [phone, otp, otpExpires]
 //     );
-
 //     // Send SMS with OTP using the placeholder function
 //     const smsMessage = `Your OTP is ${otp}. It will expire in 10 minutes.`;
 //     await sendSms(phone, smsMessage);
-
 //     res.status(200).json({ message: 'Visitor SMS OTP sent successfully' });
 //   } catch (err) {
 //     console.error('Error in /sendVisitorSmsOTP:', err);
 //     res.status(500).json({ message: 'Error sending Visitor SMS OTP' });
 //   }
 // });
-
 // // Verify Visitor SMS OTP
 // app.post('/verifyVisitorSmsOTP', async (req, res) => {
 //   const { phone, otp } = req.body;
 //   if (!phone || !otp) {
 //     return res.status(400).json({ success: false, message: 'Phone number and OTP are required' });
 //   }
-
 //   try {
 //     const result = await db.query(
 //       'SELECT * FROM GMS_Visitor_Sms_OTP WHERE phone = $1 AND otp = $2 AND otp_expires > NOW()',
 //       [phone, otp]
 //     );
-
 //     if (result.rows.length > 0) {
 //       return res.status(200).json({ success: true, message: 'Visitor SMS OTP verified successfully' });
 //     } else {
@@ -1379,8 +1257,6 @@ app.post('/reset-password', async (req, res) => {
 //     res.status(500).json({ success: false, message: 'Visitor SMS OTP verification failed' });
 //   }
 // });
-
-
 // Function for sending emails using Nodemailer
 
 
@@ -1400,7 +1276,6 @@ const sendEmail = async (to, subject, text) => {
     throw error;
   }
 };
-
 // Placeholder function for sending SMS, since you only have Nodemailer
 const sendSms = async (to, message) => {
   console.log(`SMS functionality not implemented. Attempted to send to ${to} with message: ${message}`);
@@ -1412,21 +1287,15 @@ const sendSms = async (to, message) => {
 app.post('/sendOTP', async (req, res) => {
   console.log("Request Body:", req.body);
   const { contact_info, contact_type } = req.body;
-
   // Validate request body
   if (!contact_info || !contact_type) {
     return res.status(400).json({ message: 'Contact information and type are required' });
   }
-
   // Generate a new 6-digit OTP
   const otp = generateOTP();
   // Set OTP to expire in 10 minutes from now
   const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
-
   try {
-    // Save or update the OTP in the GMS_OTP table.
-    // The ON CONFLICT clause handles cases where an OTP already exists for the contact,
-    // updating it instead of creating a new row.
     await db.query(
       `INSERT INTO GMS_OTP (contact_info, contact_type, otp, otp_expires)
              VALUES ($1, $2, $3, $4)
@@ -1435,7 +1304,6 @@ app.post('/sendOTP', async (req, res) => {
             `,
       [contact_info, contact_type, otp, otpExpires]
     );
-
     // Conditionally send the OTP via email or SMS
     if (contact_type === 'email') {
       const subject = 'Visitor Verification OTP';
@@ -1447,7 +1315,6 @@ app.post('/sendOTP', async (req, res) => {
     } else {
       return res.status(400).json({ message: 'Invalid contact type' });
     }
-
     res.status(200).json({ message: 'OTP sent successfully' });
   } catch (err) {
     // Log the full error object for detailed debugging
@@ -1456,22 +1323,18 @@ app.post('/sendOTP', async (req, res) => {
     res.status(500).json({ message: 'Error sending OTP' });
   }
 });
-
 // Verify Visitor OTP (unified for both email and SMS)
 app.post('/verifyOTP', async (req, res) => {
   const { contact_info, contact_type, otp } = req.body;
-
   if (!contact_info || !contact_type || !otp) {
     return res.status(400).json({ success: false, message: 'Contact info, type, and OTP are required' });
   }
-
   try {
     const result = await db.query(
       `SELECT * FROM GMS_OTP
        WHERE contact_info = $1 AND contact_type = $2 AND otp = $3 AND otp_expires > NOW()`,
       [contact_info, contact_type, otp]
     );
-
     if (result.rows.length > 0) {
       return res.status(200).json({ success: true, message: 'OTP verified successfully' });
     } else {
@@ -1482,11 +1345,7 @@ app.post('/verifyOTP', async (req, res) => {
     res.status(500).json({ success: false, message: 'OTP verification failed' });
   }
 });
-
 // //////////////////////////////////////////////////////////////////////  visitors SMS OTP //////////////
-
-
-
 //////////////////////////////////////////////////////////////////////  Show all visitors imges //////////////
 
 app.get('/visitor-image/:id', async (req, res) => {
@@ -1494,10 +1353,8 @@ app.get('/visitor-image/:id', async (req, res) => {
   console.log("visito id ", visitorId);
   try {
     const result = await db.query('SELECT gms_visitorimage FROM gms_gate_entries WHERE GMS_GateEntry_ID = $1', [visitorId]);
-
     if (result.rows.length > 0 && result.rows[0].gms_visitorimage) {
       const imageBuffer = result.rows[0].gms_visitorimage;
-
       res.set('Content-Type', 'image/png');
       res.send(imageBuffer);
     } else {
@@ -1508,48 +1365,36 @@ app.get('/visitor-image/:id', async (req, res) => {
     res.status(500).send('Server error');
   }
 });
-
-
-
 ///  Show all visitors list //////////////
 app.get('/allvisitors', (req, res) => {
   console.log("/allvis visitors request received");
-
   db.query(`SELECT 
               ge.gms_gateentry_id AS id,
               ge.gms_visitorname AS visitor_name,
               ge.gms_visitorfrom AS visitor_from,
               ge.gms_tomeet AS to_meet_employeename,
-              
               -- From employee table
               emp.gms_department AS emp_department,
               emp.gms_designation AS emp_designation,
-              
               -- From admin user table
               adm.adm_users_deptid AS adm_department_id,
               adm.adm_users_jobid AS adm_role_id,
-              
               ge.gms_visitpurpose AS purpose,
               ge.gms_expectedexit AS expected_exit_time,
               ge.gms_vehicleno AS vehicle_no,
               ge.gms_intime AS check_in,
               ge.gms_outtime AS check_out,
               ge.gms_status AS status,
-              
               ge.gms_identificationtype AS id_type,
               ge.gms_identificationno AS id_number,
-              
               ge.gms_mobileno AS phone_number,
               ge.gms_emailid AS email,
-              
               ge.created_on,
               ge.created_by,
               ge.modified_on,
               ge.modified_by,
-              
               ge.gms_visitorimage AS image_data,
               ge.gms_visitorimage_bytea AS image_blob
-              
           FROM public.gms_gate_entries ge
           LEFT JOIN public.gms_emplayoee_tbl emp
                 ON ge.gms_tomeet = CONCAT(emp.gms_first_name, ' ', emp.gms_last_name)
@@ -1564,7 +1409,6 @@ app.get('/allvisitors', (req, res) => {
         details: err.message
       });
     }
-
     if (results.rowCount > 0) {
       console.log(`Successfully retrieved ${results.rowCount} visitors`);
       res.json({
@@ -1584,32 +1428,26 @@ app.get('/allvisitors', (req, res) => {
     }
   });
 });
-
-
 // Delete visitor
 app.delete('/deletevisitor/:id', async (req, res) => {
   try {
     const { id } = req.params;
-
     if (!id) {
       return res.status(400).json({
         success: false,
         message: "Visitor ID is required",
       });
     }
-
     const result = await db.query(
       `DELETE FROM gms_gate_entries WHERE gms_gateentry_id = $1 RETURNING *`,
       [id]
     );
-
     if (result.rowCount === 0) {
       return res.status(404).json({
         success: false,
         message: "Visitor not found",
       });
     }
-
     res.json({
       success: true,
       message: "Visitor deleted successfully",
@@ -1671,17 +1509,14 @@ app.put('/updatevisitorstatus/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
-
     // Get current IST time as ISO string
     const istTime = moments().tz('Asia/Kolkata').format('YYYY-MM-DDTHH:mm:ss');
-
     const updates = {
       status: status,
       ...(status === 'Checked Out' && {
         gms_outtime: istTime
       })
     };
-
     const result = await db.query(
       `UPDATE gms_gate_entries
        SET gms_status = $1,
@@ -1691,14 +1526,12 @@ app.put('/updatevisitorstatus/:id', async (req, res) => {
        RETURNING *`,
       [updates.status, updates.gms_outtime, id]
     );
-
     if (result.rowCount === 0) {
       return res.status(404).json({
         success: false,
         message: 'Visitor not found',
       });
     }
-
     res.json({
       success: true,
       message: 'Visitor status updated successfully',
@@ -1738,14 +1571,12 @@ app.get('/visitors/:id', async (req, res) => {
       WHERE gms_gateentry_id = $1`,
       [id]
     );
-
     if (result.rowCount === 0) {
       return res.status(404).json({
         success: false,
         message: 'Visitor not found',
       });
     }
-
     res.json({
       success: true,
       data: result.rows[0]
@@ -1758,8 +1589,6 @@ app.get('/visitors/:id', async (req, res) => {
     });
   }
 });
-
-
 // Update visitor by ID
 app.put('/updatevisitor/:id', async (req, res) => {
   try {
@@ -1776,7 +1605,6 @@ app.put('/updatevisitor/:id', async (req, res) => {
       GMS_MobileNo,
       GMS_EmailID
     } = req.body;
-
     const result = await db.query(
       `UPDATE gms_gate_entries
        SET 
@@ -1806,14 +1634,12 @@ app.put('/updatevisitor/:id', async (req, res) => {
         id
       ]
     );
-
     if (result.rowCount === 0) {
       return res.status(404).json({
         success: false,
         message: 'Visitor not found',
       });
     }
-
     res.json({
       success: true,
       message: 'Visitor updated successfully',
@@ -1827,15 +1653,11 @@ app.put('/updatevisitor/:id', async (req, res) => {
     });
   }
 });
-
-
-
 //------------------------------------------ get employees list ------------------------------------------//
 
 app.put('/updateviewvisitorstatus/:id', async (req, res) => {
   const { id } = req.params;
   const { gms_status } = req.body;
-
   try {
     const updateQuery = `
           UPDATE gms_gate_entries
@@ -1843,22 +1665,16 @@ app.put('/updateviewvisitorstatus/:id', async (req, res) => {
           WHERE gms_gateentry_id = $2 AND gms_status = 'Checked In'
           RETURNING *;
       `;
-
     const result = await db.query(updateQuery, [gms_status, id]);
-
     if (result.rowCount === 0) {
       return res.status(404).json({ message: 'Visitor not found' });
     }
-
     res.status(200).json({ message: 'Status updated successfully', visitor: result.rows[0] });
   } catch (error) {
     console.error('Error updating status:', error);
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });
-
-
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
 app.get('/gettingemailsfromtwotable', async (req, res) => {
@@ -1871,9 +1687,7 @@ app.get('/gettingemailsfromtwotable', async (req, res) => {
     'Employee' AS user_type
   FROM gms_emplayoee_tbl
   WHERE gms_status = 'Active'
-
   UNION ALL
-
   SELECT 
     adm_users_id AS user_id,
     COALESCE(adm_users_firstname, '') || ' ' || COALESCE(adm_users_lastname, '') AS name,
@@ -1882,9 +1696,6 @@ app.get('/gettingemailsfromtwotable', async (req, res) => {
   FROM adm_user_t
   WHERE adm_users_status = true
 `);
-
-
-
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -1914,13 +1725,11 @@ app.get('/api/employees', async (req, res) => {
 
 app.post("/department_add", (req, res) => {
   const { department_name, department_description, status } = req.body;
-
   const query = `
     INSERT INTO gms_department_t (department_name, department_description, status, created_on, created_by)
     VALUES ($1, $2, $3, CURRENT_TIMESTAMP, 'System')
     RETURNING department_id
   `;
-
   db.query(query, [department_name, department_description, status], (err, result) => {
     if (err) {
       console.error("Insert error:", err);
@@ -1941,47 +1750,37 @@ app.get('/department_getalldata', (req, res) => {
     FROM gms_department_t 
     ORDER BY department_id DESC
   `;
-
   db.query(query, (err, result) => {
     if (err) {
       console.error("Error fetching department data:", err);
       return res.status(500).json({ success: false, message: "Database query failed" });
     }
-
     res.status(200).json({ success: true, data: result.rows });
   });
 });
-
-
 // Route to fetch department by ID
 app.get("/department_getbyid/:id", async (req, res) => {
   const { id } = req.params;
-
   try {
     const result = await db.query(
       `SELECT * FROM gms_department_t WHERE department_id = $1`,
       [id]
     );
-
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Department not found." });
     }
-
     res.status(200).json({ success: true, data: result.rows });
   } catch (error) {
     console.error("Error fetching department:", error);
     res.status(500).json({ success: false, message: "Internal Server Error." });
   }
 });
-
 // Route to update department details
 app.put("/department_update/:id", async (req, res) => {
   const { id } = req.params;
   const { department_name, department_description, status } = req.body;
-
   // Assuming the `modified_by` is the user who is making the update
   const modifiedBy = "admin"; // You can get this from the logged-in user's session or JWT
-
   try {
     const result = await db.query(
       `UPDATE gms_department_t
@@ -1994,51 +1793,40 @@ app.put("/department_update/:id", async (req, res) => {
        RETURNING *`,
       [department_name, department_description, status, modifiedBy, id]
     );
-
     if (result.rowCount === 0) {
       return res.status(404).json({ success: false, message: "Department not found." });
     }
-
     res.status(200).json({ success: true, message: "Department updated successfully.", data: result.rows[0] });
   } catch (error) {
     console.error("Error updating department:", error);
     res.status(500).json({ success: false, message: "Internal Server Error." });
   }
 });
-
 // Route to delete department by ID
 app.delete("/department_delete/:id", async (req, res) => {
   const { id } = req.params;
-
   try {
     // Ensure the department exists before attempting to delete
     const result = await db.query(
       `SELECT * FROM gms_department_t WHERE department_id = $1`,
       [id]
     );
-
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Department not found." });
     }
-
     // Proceed to delete the department
     await db.query(
       `DELETE FROM gms_department_t WHERE department_id = $1`,
       [id]
     );
-
     res.status(200).json({ success: true, message: "Department deleted successfully." });
   } catch (error) {
     console.error("Error deleting department:", error);
     res.status(500).json({ success: false, message: "Internal Server Error." });
   }
 });
-
-
 //------------------------------------------ get employees list ------------------------------------------//
-
 //------------------------------------------ Designation ------------------------------------------//
-
 // Get all designations
 app.get('/GMS_getall_designations', async (req, res) => {
   try {
@@ -2049,12 +1837,9 @@ app.get('/GMS_getall_designations', async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch designations' });
   }
 });
-
-
 // Create new designation
 app.post('/GMS_createnew_designations', async (req, res) => {
   const { designations_name, designations_status } = req.body;
-
   try {
     const result = await db.query(
       'INSERT INTO gms_designations (designations_name, designations_status) VALUES ($1, $2) RETURNING *',
@@ -2069,9 +1854,6 @@ app.post('/GMS_createnew_designations', async (req, res) => {
     res.status(500).json({ message: 'Failed to create designation' });
   }
 });
-
-
-
 // Get designation by ID
 app.get('/GMS_getbyid_designations/:id', async (req, res) => {
   const { id } = req.params;
@@ -2086,25 +1868,20 @@ app.get('/GMS_getbyid_designations/:id', async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch designation' });
   }
 });
-
-
 // Update designation
 app.put('/GMS_update_designations/:id', async (req, res) => {
   try {
     const id = req.params.id;
     const { designations_name, designations_status } = req.body;
-
     // Validate incoming fields
     if (!designations_name || !designations_name.trim()) {
       return res.status(400).json({ message: 'Designation name is required' });
     }
-
     // Optional: Validate status value
     const validStatus = ['Active', 'Inactive'];
     if (!validStatus.includes(designations_status)) {
       return res.status(400).json({ message: 'Invalid status value' });
     }
-
     const result = await db.query(
       `UPDATE gms_designations
        SET designations_name = $1,
@@ -2113,20 +1890,15 @@ app.put('/GMS_update_designations/:id', async (req, res) => {
        WHERE id = $3`,
       [designations_name.trim(), designations_status, id]
     );
-
     if (result.rowCount === 0) {
       return res.status(404).json({ message: 'Designation not found' });
     }
-
     res.status(200).json({ message: 'Designation updated successfully' });
   } catch (error) {
     console.error('Error updating designation:', error);
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });
-
-
-
 // Delete designation
 app.delete('/GMS_delete_designations/:id', async (req, res) => {
   const { id } = req.params;
@@ -2142,10 +1914,7 @@ app.delete('/GMS_delete_designations/:id', async (req, res) => {
     res.status(500).json({ message: 'Failed to delete designation' });
   }
 });
-
-
 //------------------------------------------ Designation ------------------------------------------//
-
 ///////////////////////////////////////////////////////// Emplayoees /////////////////////////////////////////////////////////
 
 app.get('/get_all_employees', async (req, res) => {
@@ -2183,17 +1952,13 @@ app.post('/add_employees', upload.single('image'), async (req, res) => {
     confirm_password,
     about
   } = req.body;
-
   const imagePath = req.file ? `/uploads/${req.file.filename}` : null;
-
   if (!email || !first_name || !last_name || !phone || !password || !confirm_password) {
     return res.status(400).json({ error: 'Required fields missing' });
   }
-
   if (password !== confirm_password) {
     return res.status(400).json({ error: 'Passwords do not match' });
   }
-
   try {
     const result = await db.query(`
       INSERT INTO GMS_emplayoee_tbl (
@@ -2227,7 +1992,6 @@ app.post('/add_employees', upload.single('image'), async (req, res) => {
       about || null,
       imagePath || null
     ]);
-
     res.status(201).json({
       message: 'Employee added successfully',
       employee: result.rows[0],
@@ -2243,11 +2007,9 @@ app.post('/add_employees', upload.single('image'), async (req, res) => {
 
 app.get('/get_byid_employeesview/:id', async (req, res) => {
   const id = parseInt(req.params.id, 10);
-
   if (isNaN(id)) {
     return res.status(400).json({ error: 'Invalid employee ID' });
   }
-
   try {
     const query = `
       SELECT 
@@ -2282,15 +2044,11 @@ app.get('/get_byid_employeesview/:id', async (req, res) => {
       ORDER BY v.gms_intime DESC
       LIMIT 100
     `;
-
     const result = await db.query(query, [id]);
-
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Employee not found or no visitors' });
     }
-
     const employeeRow = result.rows[0];
-
     const employee = {
       id: employeeRow.employee_id,
       name: employeeRow.full_name,
@@ -2304,7 +2062,6 @@ app.get('/get_byid_employeesview/:id', async (req, res) => {
       about: employeeRow.gms_about,
       gender: employeeRow.gms_gender
     };
-
     const visitors = result.rows
       .filter(row => row.visitor_id !== null)  // Skip if no visitor match
       .map(row => ({
@@ -2322,9 +2079,7 @@ app.get('/get_byid_employeesview/:id', async (req, res) => {
         id_type: row.id_type,
         vehicle: row.vehicle
       }));
-
     res.json({ employee, visitors, count: visitors.length });
-
   } catch (err) {
     console.error('Database error:', err);
     res.status(500).json({
@@ -2336,17 +2091,14 @@ app.get('/get_byid_employeesview/:id', async (req, res) => {
 
 app.get("/get_employee_by_id/:id", async (req, res) => {
   const { id } = req.params;
-
   try {
     const result = await db.query(
       `SELECT * FROM GMS_emplayoee_tbl WHERE id = $1`,
       [id]
     );
-
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Employee not found." });
     }
-
     res.status(200).json({ success: true, data: result.rows[0] }); // return single employee
   } catch (error) {
     console.error("Error fetching employee:", error);
@@ -2369,20 +2121,15 @@ app.put('/update_employee/:id', upload.single('image'), async (req, res) => {
     status,
     about
   } = req.body;
-
   if (!id || isNaN(parseInt(id))) {
     return res.status(400).json({ error: 'Invalid or missing employee ID' });
   }
-
   const imagePath = req.file ? `/uploads/${req.file.filename}` : null;
-
   try {
     const existing = await db.query(`SELECT * FROM GMS_emplayoee_tbl WHERE id = $1`, [id]);
-
     if (existing.rows.length === 0) {
       return res.status(404).json({ error: 'Employee not found' });
     }
-
     let updateQuery = `
       UPDATE GMS_emplayoee_tbl SET
         GMS_first_name = $1,
@@ -2396,7 +2143,6 @@ app.put('/update_employee/:id', upload.single('image'), async (req, res) => {
         GMS_status = $9,
         GMS_about = $10
     `;
-
     const values = [
       first_name || null,
       last_name || null,
@@ -2409,30 +2155,21 @@ app.put('/update_employee/:id', upload.single('image'), async (req, res) => {
       status || 'Active',
       about || null
     ];
-
     if (imagePath) {
       updateQuery += `, GMS_image = $11`;
       values.push(imagePath);
     }
-
     updateQuery += ` WHERE id = $${values.length + 1} RETURNING *`;
     values.push(id);
-
     const result = await db.query(updateQuery, values);
-
     res.json({ message: 'Employee updated successfully', employee: result.rows[0] });
-
   } catch (err) {
     console.error('Update error:', err);
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 });
-
 ///////////////////////////////////////////////////////// Emplayoees /////////////////////////////////////////////////////////
-
-
 ///////////////////////////////////////////////////////// Attendance Admin /////////////////////////////////////////////////////////
-
 // ✅ GET /CountofTotalEMP
 app.get('/CountofTotalEMP', async (req, res) => {
   try {
@@ -2444,7 +2181,6 @@ app.get('/CountofTotalEMP', async (req, res) => {
          SELECT adm_users_id AS user_id FROM public.adm_user_t
        ) AS combined_users;`
     );
-
     res.status(200).json({ total_employees: parseInt(result.rows[0].total_users, 10) });
   } catch (err) {
     console.error('Error fetching employee count:', err);
@@ -2456,38 +2192,31 @@ app.get('/CountofTotalEMP', async (req, res) => {
 
 app.get("/AttendanceEditEMP/:id", async (req, res) => {
   const { id } = req.params;
-
   try {
     const result = await db.query(
       `SELECT * FROM gms_attendance_temp WHERE gms_userid = $1`,
       [id]
     );
-
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Employee not found." });
     }
-
     res.status(200).json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error("Error fetching employee:", error);
     res.status(500).json({ success: false, message: "Internal Server Error." });
   }
 });
-
 // Helper function to convert duration object to PostgreSQL interval string
 const durationObjToInterval = (durationObj) => {
   if (!durationObj || (durationObj.hours === 0 && durationObj.minutes === 0 && durationObj.seconds === 0)) {
     return '00:00:00';
   }
-
   const hours = durationObj.hours || 0;
   const minutes = durationObj.minutes || 0;
   const seconds = durationObj.seconds || 0;
-
   // Format as HH:MM:SS for PostgreSQL interval
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 };
-
 // Helper function to validate time format
 const isValidTimeFormat = (timeStr) => {
   if (!timeStr) return true; // Allow null/empty
@@ -2505,7 +2234,6 @@ app.put('/AttendanceEditUpdateEMP/:id', async (req, res) => {
     break_time,
     late_by
   } = req.body;
-
   console.log('Received PUT request to update attendance:', {
     employee_id,
     name,
@@ -2515,7 +2243,6 @@ app.put('/AttendanceEditUpdateEMP/:id', async (req, res) => {
     break_time,
     late_by
   });
-
   try {
     // Validate required fields
     if (!employee_id || !name || !status || !check_in) {
@@ -2523,18 +2250,14 @@ app.put('/AttendanceEditUpdateEMP/:id', async (req, res) => {
         error: 'Missing required fields: employee_id, name, status, and check_in are required'
       });
     }
-
     if (!isValidTimeFormat(check_in)) {
       return res.status(400).json({ error: 'Invalid check_in time format. Use HH:MM:SS' });
     }
-
     if (check_out && !isValidTimeFormat(check_out)) {
       return res.status(400).json({ error: 'Invalid check_out time format. Use HH:MM:SS' });
     }
-
     let breakDuration = null;
     let lateDuration = null;
-
     if (break_time) {
       if (typeof break_time === 'object') {
         breakDuration = durationObjToInterval(break_time);
@@ -2545,7 +2268,6 @@ app.put('/AttendanceEditUpdateEMP/:id', async (req, res) => {
         return res.status(400).json({ error: 'Invalid break_time format' });
       }
     }
-
     if (late_by) {
       if (typeof late_by === 'object') {
         lateDuration = durationObjToInterval(late_by);
@@ -2556,7 +2278,6 @@ app.put('/AttendanceEditUpdateEMP/:id', async (req, res) => {
         return res.status(400).json({ error: 'Invalid late_by format' });
       }
     }
-
     // Perform the update using name + userid
     const result = await db.query(
       `UPDATE public.gms_attendance_temp 
@@ -2581,21 +2302,17 @@ app.put('/AttendanceEditUpdateEMP/:id', async (req, res) => {
         lateDuration     // $7
       ]
     );
-
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'Attendance record not found (update)' });
     }
-
     console.log(`Attendance record for ${name} (user ID ${employee_id}) updated successfully`);
     res.status(200).json({
       message: 'Attendance updated successfully',
       updated_id: result.rows[0].gms_id,
       updated_record: result.rows[0]
     });
-
   } catch (error) {
     console.error('Error updating attendance:', error);
-
     if (error.code === '22007') {
       return res.status(400).json({ error: 'Invalid time/interval format' });
     } else if (error.code === '23505') {
@@ -2603,7 +2320,6 @@ app.put('/AttendanceEditUpdateEMP/:id', async (req, res) => {
     } else if (error.code === '23503') {
       return res.status(400).json({ error: 'Foreign key constraint violation' });
     }
-
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
@@ -2612,7 +2328,6 @@ app.put('/AttendanceEditUpdateEMP/:id', async (req, res) => {
 
 app.get('/MonthlyAttendanceReport/:year', async (req, res) => {
   const { year } = req.params;
-
   try {
     const result = await db.query(
       `WITH all_users AS (
@@ -2642,18 +2357,12 @@ app.get('/MonthlyAttendanceReport/:year', async (req, res) => {
        ORDER BY sort_order`,
       [year]
     );
-
     res.status(200).json(result.rows);
   } catch (error) {
     console.error('Error fetching monthly report:', error);
     res.status(500).json({ error: 'Failed to fetch report' });
   }
 });
-
-
-
-
-
 // Attendance summary endpoint
 app.get('/AttendanceStatusEMP', async (req, res) => {
   try {
@@ -2668,7 +2377,6 @@ attendance_today AS (
   FROM public.gms_attendance_temp
   WHERE DATE(gms_createdat) = CURRENT_DATE
 )
-
 -- Final summary
 SELECT 'Present' AS status, COUNT(*) AS count
 FROM all_users u
@@ -2717,7 +2425,6 @@ WHERE a.gms_status = 'lop';
     res.status(500).json({ error: 'Database error', details: err.message });
   }
 });
-
 // Main attendance
 app.get('/AttendanceDeltailsEMP', async (req, res) => {
   try {
@@ -2750,12 +2457,10 @@ app.get('/AttendanceDeltailsEMP', async (req, res) => {
     res.status(500).json({ error: 'Database error', details: err.message });
   }
 });
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 app.get('/AttendanceFullDetails/:userid', async (req, res) => {
   const userid = decodeURIComponent(req.params.userid);
-
   try {
     const result = await db.query(`
       WITH user_attendance AS (
@@ -2799,13 +2504,11 @@ app.get('/AttendanceFullDetails/:userid', async (req, res) => {
         t.job_id,
         t.email,
         t.gms_productionhours AS production_hours_today,
-
         -- Aggregated durations
         ROUND(SUM(CASE WHEN ua.date = CURRENT_DATE THEN ua.total_seconds ELSE 0 END) / 3600, 2) AS total_hours_today,
         ROUND(SUM(CASE WHEN ua.date >= date_trunc('week', CURRENT_DATE) THEN ua.total_seconds ELSE 0 END) / 3600, 2) AS total_hours_week,
         ROUND(SUM(CASE WHEN date_trunc('month', ua.date) = date_trunc('month', CURRENT_DATE) THEN ua.total_seconds ELSE 0 END) / 3600, 2) AS total_hours_month,
         ROUND(SUM(CASE WHEN date_trunc('month', ua.date) = date_trunc('month', CURRENT_DATE) THEN d.overtime_seconds ELSE 0 END) / 3600, 2) AS overtime_month,
-
         -- Today's breakdown
         ROUND((t.total_seconds - COALESCE(t.break_seconds, 0) - COALESCE(t.late_seconds, 0)) / 3600.0, 2) AS working_hours,
         ROUND((t.total_seconds - COALESCE(t.break_seconds, 0)) / 3600.0, 2) AS productive_hours,
@@ -2822,13 +2525,10 @@ app.get('/AttendanceFullDetails/:userid', async (req, res) => {
         t.gms_name, t.gms_userid, t.profile_image, t.job_id, t.email,
         t.gms_productionhours, t.break_seconds, t.late_seconds, t.total_seconds;
     `, [userid]);
-
     const row = result.rows[0];
-
     if (!row) {
       return res.status(404).json({ error: 'No attendance record found for user.' });
     }
-
     res.status(200).json({
       username: row.username,
       userId: row.user_id,
@@ -2846,13 +2546,11 @@ app.get('/AttendanceFullDetails/:userid', async (req, res) => {
       late_hours: row.late_hours,
       overtime_hours: row.overtime_hours
     });
-
   } catch (error) {
     console.error('Error fetching full attendance details:', error);
     res.status(500).json({ error: 'Failed to fetch attendance full details' });
   }
 });
-
 // WITH user_attendance AS (
 //   SELECT 
 //     a.gms_userid,
@@ -2899,27 +2597,22 @@ app.get('/AttendanceFullDetails/:userid', async (req, res) => {
 //   t.profile_image,
 //   t.job_id,
 //   t.email,
-
 //   -- Raw durations (interval)
 //   TO_CHAR(t.gms_productionhours, 'HH24:MI:SS') AS production_hours_today,
 //   TO_CHAR(t.gms_breakduration, 'HH24:MI:SS') AS break_duration,
 //   TO_CHAR(t.gms_lateduration, 'HH24:MI:SS') AS late_duration,
-
 //   -- Computed values formatted as HH:MI:SS
 //   TO_CHAR(make_interval(secs => ROUND(t.late_seconds)), 'HH24:MI:SS') AS late_hours,
 //   TO_CHAR(make_interval(secs => ROUND(t.total_seconds - COALESCE(t.break_seconds, 0) - COALESCE(t.late_seconds, 0))), 'HH24:MI:SS') AS working_hours,
 //   TO_CHAR(make_interval(secs => ROUND(t.total_seconds - COALESCE(t.break_seconds, 0))), 'HH24:MI:SS') AS productive_hours,
 //   TO_CHAR(make_interval(secs => ROUND(COALESCE(t.break_seconds, 0))), 'HH24:MI:SS') AS break_hours,
 //   TO_CHAR(make_interval(secs => ROUND(CASE WHEN t.total_seconds > 32400 THEN (t.total_seconds - 32400) ELSE 0 END)), 'HH24:MI:SS') AS overtime_today,
-
 //   -- Total durations for today, week, and month
 //   TO_CHAR(make_interval(secs => ROUND(SUM(CASE WHEN ua.date = CURRENT_DATE THEN ua.total_seconds ELSE 0 END))), 'HH24:MI:SS') AS total_hours_today,
 //   TO_CHAR(make_interval(secs => ROUND(SUM(CASE WHEN ua.date >= date_trunc('week', CURRENT_DATE) AND ua.date <= CURRENT_DATE THEN ua.total_seconds ELSE 0 END))), 'HH24:MI:SS') AS total_hours_week,
 //   TO_CHAR(make_interval(secs => ROUND(SUM(CASE WHEN date_trunc('month', ua.date) = date_trunc('month', CURRENT_DATE) THEN ua.total_seconds ELSE 0 END))), 'HH24:MI:SS') AS total_hours_month,
-
 //   -- Monthly overtime in HH:MI:SS
 //   TO_CHAR(make_interval(secs => ROUND(COALESCE(m.month_overtime_seconds, 0))), 'HH24:MI:SS') AS overtime_this_month
-
 // FROM user_attendance ua
 // LEFT JOIN today_record t ON TRUE
 // LEFT JOIN monthly_overtime m ON TRUE
@@ -2927,13 +2620,11 @@ app.get('/AttendanceFullDetails/:userid', async (req, res) => {
 //   t.gms_name, t.gms_userid, t.profile_image, t.job_id, t.email,
 //   t.gms_productionhours, t.gms_breakduration, t.gms_lateduration,
 //   t.total_seconds, t.break_seconds, t.late_seconds, m.month_overtime_seconds;
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 app.get('/AttendanceDeltailsEMPTable/:userId', async (req, res) => {
   const userId = req.params.userId;
-
   try {
     const query = `
       SELECT 
@@ -2958,9 +2649,7 @@ app.get('/AttendanceDeltailsEMPTable/:userId', async (req, res) => {
       ORDER BY 
           gms_createdat DESC;
     `;
-
     const result = await db.query(query, [userId]);
-
     res.status(200).json({
       success: true,
       records: result.rows
@@ -2973,32 +2662,22 @@ app.get('/AttendanceDeltailsEMPTable/:userId', async (req, res) => {
     });
   }
 });
-
-
-
 // Delete attendance record endpoint
 app.delete('/AttendanceDeleteEMP/:id', async (req, res) => {
   try {
     const { id } = req.params;
-
     await db.query(
       `DELETE FROM public.gms_attendance_temp WHERE gms_userid = $1`,
       [id]
     );
-
     res.status(200).json({ message: 'Attendance record deleted successfully' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Database error', details: err.message });
   }
 });
-
 ///////////////////////////////////////////////////////// Attendance Admin /////////////////////////////////////////////////////////
-
-
-
 ///////////////////////////////////////////////////////// Attendance Emplayoees /////////////////////////////////////////////////////////
-
 // Get employee profile data
 app.get('/api/employee/profile', async (req, res) => {
   try {
@@ -3018,20 +2697,14 @@ app.get('/api/employee/profile', async (req, res) => {
       ORDER BY 
           gms_createdat DESC
       LIMIT 1;
-
     `;
-
     const profileResult = await db.query(profileQuery);
-
     if (profileResult.rows.length === 0) {
       return res.status(404).json({ error: 'Employee not found' });
     }
-
     const profile = profileResult.rows[0];
-
     // Check if user is currently punched in
     const isPunchedIn = profile.gms_status === 'Present' && !profile.gms_checkout;
-
     res.json({
       ...profile,
       isPunchedIn
@@ -3041,35 +2714,26 @@ app.get('/api/employee/profile', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-
-
-
 // Get timeline data. Full working version of /api/attendance/timeline endpoint with debug logs and fixes
 app.get('/api/attendance/timeline', async (req, res) => {
   try {
     const userId = 'Bob Johnson'; // Hardcoded for example
     const todayDate = new Date().toISOString().split('T')[0];
-
     // Helper to convert 'HH:MM:SS' interval string to hours
     const intervalToHours = (interval) => {
       if (!interval) return 0;
-
       if (typeof interval === 'object') {
         const h = interval.hours || 0;
         const m = interval.minutes || 0;
         const s = interval.seconds || 0;
         return h + m / 60 + s / 3600;
       }
-
       if (typeof interval === 'string') {
         const parts = interval.split(':').map(Number);
         return (parts[0] || 0) + (parts[1] || 0) / 60 + (parts[2] || 0) / 3600;
       }
-
       return 0;
     };
-
-
     // Query to get today's attendance records
     const timelineQuery = `
       SELECT 
@@ -3086,32 +2750,24 @@ app.get('/api/attendance/timeline', async (req, res) => {
       ORDER BY 
         gms_checkin ASC
     `;
-
     const result = await db.query(timelineQuery, [userId]);
-
     let workingHours = 0;
     let breakHours = 0;
     let overtime = 0;
     let segments = [];
-
     const today = new Date();
     const baseDate = today.toISOString().split('T')[0];
-
     if (result.rows.length > 0) {
       result.rows.forEach(record => {
         const checkinStr = record.gms_checkin;
         const checkoutStr = record.gms_checkout;
-
         const startTime = checkinStr ? new Date(`${baseDate}T${checkinStr}`) : null;
         const endTime = checkoutStr ? new Date(`${baseDate}T${checkoutStr}`) : null;
-
         const prodHours = intervalToHours(record.gms_productionhours);
         const brkHours = intervalToHours(record.gms_breakduration);
-
         workingHours += prodHours;
         breakHours += brkHours;
         if (prodHours > 8) overtime += prodHours - 8;
-
         // Debug log for each record
         console.log({
           checkinStr,
@@ -3121,55 +2777,43 @@ app.get('/api/attendance/timeline', async (req, res) => {
           prodHours,
           brkHours
         });
-
         // Timeline segment calculation
         if (startTime && endTime) {
           const dayStart = new Date(startTime);
           dayStart.setHours(6, 0, 0, 0);
-
           const dayEnd = new Date(startTime);
           dayEnd.setHours(30, 0, 0, 0); // 6 AM next day
-
           const totalDuration = dayEnd - dayStart;
           const timelineStart = ((startTime - dayStart) / totalDuration) * 100;
           const timelineEnd = ((endTime - dayStart) / totalDuration) * 100;
-
           // Work segment
           segments.push({ start: timelineStart, end: timelineEnd, color: 'bg-green-500' });
-
           // Break segment (assume in middle of shift)
           if (brkHours > 0) {
             const totalHours = (endTime - startTime) / (1000 * 60 * 60);
             const workPortion = totalHours - brkHours;
             const breakStartTime = new Date(startTime.getTime() + workPortion * 0.5 * 60 * 60 * 1000);
             const breakEndTime = new Date(breakStartTime.getTime() + brkHours * 60 * 60 * 1000);
-
             const breakStart = ((breakStartTime - dayStart) / totalDuration) * 100;
             const breakEnd = ((breakEndTime - dayStart) / totalDuration) * 100;
-
             segments.push({ start: breakStart, end: breakEnd, color: 'bg-yellow-500' });
           }
-
           // Overtime segment
           if (prodHours > 8) {
             const overtimeStartTime = new Date(startTime.getTime() + 8 * 60 * 60 * 1000);
             const overtimeStart = ((overtimeStartTime - dayStart) / totalDuration) * 100;
-
             segments.push({ start: overtimeStart, end: timelineEnd, color: 'bg-blue-500' });
           }
         }
       });
     }
-
     const productiveHours = workingHours * 0.8; // Simplified productivity estimate
-
     const timelineData = [
       { label: 'Working hours', value: `${workingHours.toFixed(1)}h`, color: 'text-gray-800', indicator: 'bg-gray-500' },
       { label: 'Productive Hours', value: `${productiveHours.toFixed(1)}h`, color: 'text-green-500', indicator: 'bg-green-500' },
       { label: 'Break hours', value: `${(breakHours * 60).toFixed(0)}m`, color: 'text-yellow-500', indicator: 'bg-yellow-500' },
       { label: 'Overtime', value: `${overtime.toFixed(1)}h`, color: 'text-blue-500', indicator: 'bg-blue-500' },
     ];
-
     res.json({
       summary: timelineData,
       segments: segments
@@ -3179,13 +2823,11 @@ app.get('/api/attendance/timeline', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-
 // Get summary statistics for dashboard cards
 app.get('/api/attendance/summary', async (req, res) => {
   try {
     const userId = 'Bob Johnson'; // Hardcoded for example
     const now = new Date();
-
     // Today's hours
     const todayQuery = `
       SELECT 
@@ -3196,7 +2838,6 @@ app.get('/api/attendance/summary', async (req, res) => {
         gms_name = $1
         AND DATE(gms_createdat) = CURRENT_DATE
     `;
-
     // This week's hours
     const weekQuery = `
       SELECT 
@@ -3208,7 +2849,6 @@ app.get('/api/attendance/summary', async (req, res) => {
         AND gms_createdat >= date_trunc('week', CURRENT_DATE)
         AND gms_createdat <= CURRENT_DATE
     `;
-
     // This month's hours
     const monthQuery = `
       SELECT 
@@ -3220,7 +2860,6 @@ app.get('/api/attendance/summary', async (req, res) => {
         AND gms_createdat >= date_trunc('month', CURRENT_DATE)
         AND gms_createdat <= CURRENT_DATE
     `;
-
     // Overtime this month
     const overtimeQuery = `
       SELECT 
@@ -3237,7 +2876,6 @@ app.get('/api/attendance/summary', async (req, res) => {
         AND gms_createdat >= date_trunc('month', CURRENT_DATE)
         AND gms_createdat <= CURRENT_DATE
     `;
-
     // Execute all queries in parallel
     const [todayResult, weekResult, monthResult, overtimeResult] = await Promise.all([
       db.query(todayQuery, [userId]),
@@ -3245,11 +2883,9 @@ app.get('/api/attendance/summary', async (req, res) => {
       db.query(monthQuery, [userId]),
       db.query(overtimeQuery, [userId])
     ]);
-
     // Calculate percentage changes compared to previous periods
     // For simplicity, we're using hardcoded values for the trend percentages
     // In a real implementation, you would query previous periods and calculate the change
-
     const summaryCards = [
       {
         title: "Total Hours Today",
@@ -3288,23 +2924,15 @@ app.get('/api/attendance/summary', async (req, res) => {
         donutData: [parseFloat(overtimeResult.rows[0].overtime_hours), 28 - parseFloat(overtimeResult.rows[0].overtime_hours)],
       },
     ];
-
     res.json(summaryCards);
   } catch (error) {
     console.error('Error fetching summary data:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-
-
 ///////////////////////////////////////////////////////// Attendance Emplayoees /////////////////////////////////////////////////////////
-
-
-
 ///////////////////////////////////////////////////////// Complete Punch In and Punch Out with Utilities /////////////////////////////////////////////////////////
-
 // ================== HELPER FUNCTIONS ==================
-
 // Convert milliseconds to PostgreSQL interval format
 function msToInterval(ms) {
   if (ms <= 0) return '00:00:00';
@@ -3313,7 +2941,6 @@ function msToInterval(ms) {
   const seconds = Math.floor((ms % (1000 * 60)) / 1000);
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
-
 // Calculate total break time from punch logs
 async function calculateBreakTime(userId, today) {
   try {
@@ -3325,34 +2952,27 @@ async function calculateBreakTime(userId, today) {
        ORDER BY gms_createdat ASC`,
       [userId, today]
     );
-
     if (logs.rows.length <= 1) return '00:00:00';
-
     let totalBreakMs = 0;
-
     // Calculate break time between consecutive sessions
     for (let i = 0; i < logs.rows.length - 1; i++) {
       const currentCheckout = logs.rows[i].gms_checkout_log;
       const nextCheckin = logs.rows[i + 1].gms_checkin_log;
-
       if (currentCheckout && nextCheckin) {
         const checkoutTime = new Date(`${today}T${currentCheckout}`);
         const checkinTime = new Date(`${today}T${nextCheckin}`);
         const breakDuration = checkinTime - checkoutTime;
-
         if (breakDuration > 0) {
           totalBreakMs += breakDuration;
         }
       }
     }
-
     return msToInterval(totalBreakMs);
   } catch (error) {
     console.error('Error calculating break time:', error);
     return '00:00:00';
   }
 }
-
 // Calculate total production hours from all sessions
 async function calculateProductionHours(userId, today) {
   try {
@@ -3363,34 +2983,28 @@ async function calculateProductionHours(userId, today) {
        ORDER BY gms_createdat ASC`,
       [userId, today]
     );
-
     let totalProductionMs = 0;
-
     for (const log of logs.rows) {
       if (log.gms_checkin_log && log.gms_checkout_log) {
         const checkinTime = new Date(`${today}T${log.gms_checkin_log}`);
         const checkoutTime = new Date(`${today}T${log.gms_checkout_log}`);
         const sessionDuration = checkoutTime - checkinTime;
-
         if (sessionDuration > 0) {
           totalProductionMs += sessionDuration;
         }
       }
     }
-
     return msToInterval(totalProductionMs);
   } catch (error) {
     console.error('Error calculating production hours:', error);
     return '00:00:00';
   }
 }
-
 // ================== PUNCH IN ENDPOINT ==================
 
 app.post('/AttendancePunchIn', async (req, res) => {
   const { userId } = req.body;
   if (!userId) return res.status(400).json({ message: 'Missing userId' });
-
   try {
     // Get current IST time
     const now = new Date();
@@ -3398,42 +3012,34 @@ app.post('/AttendancePunchIn', async (req, res) => {
     const today = istTime.toISOString().split('T')[0];
     const nowTime = istTime.toTimeString().substring(0, 8);
     const nowISO = istTime.toISOString();
-
     // Attendance rules
     const scheduledStart = new Date(`${today}T09:30:00`);
     const lateLimit = new Date(`${today}T09:45:00`);
     const currentTime = new Date(`${today}T${nowTime}`);
-
     // Get user info
     const userRes = await db.query(
       'SELECT adm_users_firstname, adm_users_lastname FROM ADM_User_T WHERE adm_users_id = $1',
       [userId]
     );
     if (userRes.rows.length === 0) return res.status(404).json({ message: 'User not found' });
-
     const userName = `${userRes.rows[0].adm_users_firstname} ${userRes.rows[0].adm_users_lastname}`;
-
     // Check if user has any incomplete session (not punched out)
     const openSession = await db.query(
       `SELECT * FROM gms_attendance_log 
        WHERE gms_userid = $1 AND DATE(gms_createdat) = $2 AND gms_checkout_log IS NULL`,
       [userId, today]
     );
-
     if (openSession.rows.length > 0) {
       return res.status(400).json({ message: 'Already punched in. Please punch out first.' });
     }
-
     // Check if temp record exists for today
     const tempRecord = await db.query(
       `SELECT * FROM gms_attendance_temp WHERE gms_userid = $1 AND DATE(gms_createdat) = $2`,
       [userId, today]
     );
-
     // Determine status and late duration only for first punch-in of the day
     let status = 'Present';
     let lateDuration = '00:00:00';
-
     if (tempRecord.rows.length === 0) {
       // First punch-in of the day
       if (currentTime > scheduledStart && currentTime <= lateLimit) {
@@ -3443,7 +3049,6 @@ app.post('/AttendancePunchIn', async (req, res) => {
         status = 'LOP';
         lateDuration = msToInterval(currentTime - scheduledStart);
       }
-
       // Create temp record
       await db.query(
         `INSERT INTO gms_attendance_temp (
@@ -3471,7 +3076,6 @@ app.post('/AttendancePunchIn', async (req, res) => {
         [nowISO, userId, today]
       );
     }
-
     // Insert into log table
     await db.query(
       `INSERT INTO gms_attendance_log (
@@ -3480,41 +3084,33 @@ app.post('/AttendancePunchIn', async (req, res) => {
       ) VALUES ($1, $2, $3, NULL, $4, $4)`,
       [userId, userName, nowTime, nowISO]
     );
-
     return res.status(201).json({
       message: `Punch-in recorded`,
       checkInTime: nowTime,
       status: status
     });
-
   } catch (err) {
     console.error('Punch In error:', err);
     res.status(500).json({ message: 'Punch In failed', error: err.message });
   }
 });
-
 // ================== PUNCH OUT ENDPOINT ==================
 
 app.post('/AttendancePunchOut', async (req, res) => {
   const { userId } = req.body;
-
   if (!userId) return res.status(400).json({ message: 'Missing userId' });
-
   try {
     const now = new Date();
     const istTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
     const today = istTime.toISOString().split('T')[0];
     const nowTime = istTime.toTimeString().substring(0, 8);
     const nowISO = istTime.toISOString();
-
     const userRes = await db.query(
       'SELECT adm_users_firstname, adm_users_lastname FROM ADM_User_T WHERE adm_users_id = $1',
       [userId]
     );
     if (userRes.rows.length === 0) return res.status(404).json({ message: 'User not found' });
-
     const userName = `${userRes.rows[0].adm_users_firstname} ${userRes.rows[0].adm_users_lastname}`;
-
     // Check for open session
     const openSession = await db.query(
       `SELECT * FROM gms_attendance_log 
@@ -3522,11 +3118,9 @@ app.post('/AttendancePunchOut', async (req, res) => {
        ORDER BY gms_id DESC LIMIT 1`,
       [userId, today]
     );
-
     if (openSession.rows.length === 0) {
       return res.status(400).json({ message: 'No active session found. Please punch in first.' });
     }
-
     // Update the log with checkout time
     await db.query(
       `UPDATE gms_attendance_log
@@ -3534,11 +3128,9 @@ app.post('/AttendancePunchOut', async (req, res) => {
        WHERE gms_id = $3`,
       [nowTime, nowISO, openSession.rows[0].gms_id]
     );
-
     // Calculate updated totals
     const breakTime = await calculateBreakTime(userId, today);
     const productionHours = await calculateProductionHours(userId, today);
-
     // Get first check-in and update temp record
     const firstSession = await db.query(
       `SELECT gms_checkin_log FROM gms_attendance_log 
@@ -3546,9 +3138,7 @@ app.post('/AttendancePunchOut', async (req, res) => {
        ORDER BY gms_createdat ASC LIMIT 1`,
       [userId, today]
     );
-
     const firstCheckin = firstSession.rows[0]?.gms_checkin_log;
-
     // Update temp record with latest checkout and calculated totals
     await db.query(
       `UPDATE gms_attendance_temp
@@ -3556,7 +3146,6 @@ app.post('/AttendancePunchOut', async (req, res) => {
        WHERE gms_userid = $5 AND DATE(gms_createdat) = $6`,
       [nowTime, breakTime, productionHours, nowISO, userId, today]
     );
-
     return res.status(200).json({
       message: 'Punch out recorded',
       checkOutTime: nowTime,
@@ -3568,27 +3157,22 @@ app.post('/AttendancePunchOut', async (req, res) => {
     res.status(500).json({ message: 'Punch Out failed', error: err.message });
   }
 });
-
 // ================== ATTENDANCE STATUS ENDPOINT ==================
 
 app.get('/AttendanceStatus/:userId', async (req, res) => {
   const userId = parseInt(req.params.userId);
   if (isNaN(userId)) return res.status(400).json({ message: "Invalid user ID" });
-
   try {
     const now = new Date();
     const istTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
     const today = istTime.toISOString().split('T')[0];
-
     // Check for open session
     const openSession = await db.query(
       `SELECT * FROM gms_attendance_log 
        WHERE gms_userid = $1 AND DATE(gms_createdat) = $2 AND gms_checkout_log IS NULL`,
       [userId, today]
     );
-
     const hasOpenSession = openSession.rows.length > 0;
-
     // Get temp record for status
     const tempRecord = await db.query(
       `SELECT gms_checkin, gms_checkout, gms_status, gms_productionhours
@@ -3596,7 +3180,6 @@ app.get('/AttendanceStatus/:userId', async (req, res) => {
        WHERE gms_userid = $1 AND DATE(gms_createdat) = $2`,
       [userId, today]
     );
-
     if (tempRecord.rows.length === 0) {
       return res.json({
         isPunchedIn: false,
@@ -3604,10 +3187,8 @@ app.get('/AttendanceStatus/:userId', async (req, res) => {
         status: 'not_started'
       });
     }
-
     const record = tempRecord.rows[0];
     let status = 'not_started';
-
     if (record.gms_status === 'Absent') {
       status = 'absent';
     } else if (hasOpenSession) {
@@ -3615,7 +3196,6 @@ app.get('/AttendanceStatus/:userId', async (req, res) => {
     } else if (record.gms_checkin && record.gms_checkout) {
       status = 'finished';
     }
-
     return res.json({
       isPunchedIn: hasOpenSession,
       isPunchedOut: !hasOpenSession && !!record.gms_checkout,
@@ -3624,16 +3204,12 @@ app.get('/AttendanceStatus/:userId', async (req, res) => {
       checkOutTime: record.gms_checkout,
       productionHours: record.gms_productionhours
     });
-
   } catch (err) {
     console.error("Error fetching punch status:", err);
     res.status(500).json({ message: "Error fetching punch status", error: err.message });
   }
 });
-
 // ================== ATTENDANCE DETAILS ENDPOINT (Updated) ==================
-
-
 // ================== ATTENDANCE SUMMARY ENDPOINT (Updated) ==================
 
 app.get('/AttendanceStatusEMP', async (req, res) => {
@@ -3641,7 +3217,6 @@ app.get('/AttendanceStatusEMP', async (req, res) => {
     const now = new Date();
     const istTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
     const today = istTime.toISOString().split('T')[0];
-
     const query = `
       SELECT 
         CASE 
@@ -3657,7 +3232,6 @@ app.get('/AttendanceStatusEMP', async (req, res) => {
       ) distinct_records
       GROUP BY status
     `;
-
     const result = await db.query(query, [today]);
     res.json(result.rows);
   } catch (error) {
@@ -3665,35 +3239,27 @@ app.get('/AttendanceStatusEMP', async (req, res) => {
     res.status(500).json({ message: 'Error fetching attendance summary', error: error.message });
   }
 });
-
 // ================== DELETE ATTENDANCE ENDPOINT ==================
 
 app.delete('/AttendanceDeleteEMP/:id', async (req, res) => {
   const { id } = req.params;
-
   try {
     const result = await db.query('DELETE FROM gms_attendance_temp WHERE gms_id = $1 RETURNING *', [id]);
-
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Attendance record not found' });
     }
-
     // Also delete related log entries
     await db.query(
       'DELETE FROM gms_attendance_log WHERE gms_userid = $1 AND DATE(gms_createdat) = DATE($2)',
       [result.rows[0].gms_userid, result.rows[0].gms_createdat]
     );
-
     res.json({ message: 'Attendance record deleted successfully' });
   } catch (error) {
     console.error('Error deleting attendance:', error);
     res.status(500).json({ message: 'Error deleting attendance record', error: error.message });
   }
 });
-
-
 ///////////////////////////////////////////////////////// End of Complete Code /////////////////////////////////////////////////////////
-
 ///////////////////////////////////////////////////////// Module Start /////////////////////////////////////////////////////////
 const current = new Date()
 const Currdate = `${current.getFullYear()}-${current.getMonth() + 1}-${current.getDate()}`;
@@ -3707,7 +3273,6 @@ app.get('/moduleload', (req, res) => {
         ELSE 'Unknown' 
     END AS "Module_Valid_Converted"
      FROM public."GMS_Module" WHERE "Module_Application"='GMS' order by "Module_ID"desc `, (error, results) => {
-
     if (error) {
       console.error('Error executing query', error);
       res.status(500).json({ error });
@@ -3720,9 +3285,7 @@ app.get('/moduleload', (req, res) => {
 
 app.delete('/moduledlt/:id', (req, res) => {
   const ModID = req.params.id;
-
   console.log('/moduledlt/:id', ModID)
-
   db.query(`select a.* from public."GMS_Module" a, 
         public."GMS_Program" b
         where  b."Program_ModuleID" = a."Module_ID" and b."Program_Valid" = true and a."Module_ID" = $1 `, [ModID], (err, data) => {
@@ -3742,16 +3305,13 @@ app.delete('/moduledlt/:id', (req, res) => {
       }
     }
   })
-
 });
 
 
 
 app.post('/moduleadd/:createdby', (req, res) => {
-
   const createdby = req.params.createdby;
   console.log('/moduleadd/:createdby', req.body.Module_Code, req.body.Module_Name, req.body.Module_Valid, req.body.Module_Created_ON, createdby)
-
   db.query(`SELECT "Module_Code" FROM public."GMS_Module" WHERE trim(UPPER("Module_Code")) = trim(UPPER($1)) AND "Module_Application"='GMS'`, [req.body.Module_Code], (err1, result1) => {
     if (err1) {
       console.log('error1');
@@ -3772,9 +3332,7 @@ app.post('/moduleadd/:createdby', (req, res) => {
                 [req.body.Module_Code, req.body.Module_Name, req.body.Module_Valid, Currdate, createdby, 'GMS'], (err, result) => {
                   if (err) {
                     console.log('error', err)
-
                     return res.json(err);
-
                   } else {
                     console.log("added")
                     return res.json("Added success");
@@ -3790,11 +3348,8 @@ app.post('/moduleadd/:createdby', (req, res) => {
 
 
 app.get('/module/:id', (req, res) => {
-
   const id = req.params.id;
-
   console.log('/module/:id', id);
-
   db.query(`select * from public."GMS_Module" where "Module_ID" = $1`, [id], (err, result) => {
     if (err) return res.json(err);
     return res.json(result.rows);
@@ -3803,12 +3358,9 @@ app.get('/module/:id', (req, res) => {
 
 
 app.put('/moduleedit/:modifiedby/:id', (req, res) => {
-
   const ModId = req.params.id;
   const modifiedby = req.params.modifiedby;
-
   console.log('/moduleedit/:modifiedby/:id', ModId, modifiedby);
-
   db.query(`SELECT "Module_Code" FROM public."GMS_Module" WHERE trim(UPPER("Module_Code")) = trim(UPPER($1))  AND "Module_ID" != $2 AND "Module_Application"='GMS'`, [req.body.Module_Code, ModId], (err1, result1) => {
     if (err1) {
       console.log('error1');
@@ -3825,7 +3377,6 @@ app.put('/moduleedit/:modifiedby/:id', (req, res) => {
             if (result1.rows.length > 0) {
               return res.json({ message: 'Name already exists' });
             } else {
-
               db.query(`update public."GMS_Module" set "Module_Code" = $1,"Module_Name"=$2,"Module_Valid"=$3,"Module_Modified_BY"=$4,"Module_Modified_ON"=$5 ,"Module_Application"=$6 where "Module_ID" = $7`,
                 [req.body.Module_Code, req.body.Module_Name, req.body.Module_Valid, modifiedby, Currdate, 'GMS', ModId], (err, result) => {
                   if (err) {
@@ -3834,7 +3385,6 @@ app.put('/moduleedit/:modifiedby/:id', (req, res) => {
                     return res.json(result);
                   }
                 })
-
             }
           }
         }
@@ -3843,17 +3393,11 @@ app.put('/moduleedit/:modifiedby/:id', (req, res) => {
     }
   })
 });
-
-
 //////------------------ Module Ends Here------------------------------///////
-
-
 //////------------------ Program Starts Here------------------------------///////
 
 app.get('/programload', (req, res) => {
-
   console.log('/program')
-
   db.query(`SELECT *,
      CASE 
         WHEN "Program_Valid" IS TRUE THEN 'Active'
@@ -3872,10 +3416,8 @@ app.get('/programload', (req, res) => {
 
 
 app.delete('/programdlt/:id', (req, res) => {
-
   const ProgID = req.params.id;
   console.log('/programdlt/:id', ProgID);
-
   db.query(`select a.* from public."GMS_Program" a, 
         public."GMS_Roleprograms" b
         where  b."RolePrograms_ProgramID" = a."Program_ID" 
@@ -3894,11 +3436,8 @@ app.delete('/programdlt/:id', (req, res) => {
 
 
 app.post('/programadd/:createdby', (req, res) => {
-
   const createdby = req.params.createdby
-
   console.log("/programadd/:createdby", req.body.Program_Code, req.body.Program_Name, req.body.Program_ModuleID, req.body.Program_Valid, Currdate, createdby, req.body.Program_Nav_Name)
-
   db.query(`SELECT "Program_Code" FROM public."GMS_Program" WHERE trim(UPPER("Program_Code")) = trim(UPPER($1)) AND  "Program_ModuleID" =$2`, [req.body.Program_Code, req.body.Program_ModuleID], (err1, result1) => {
     if (err1) {
       console.log('error1');
@@ -3929,7 +3468,6 @@ app.post('/programadd/:createdby', (req, res) => {
                         if (err) {
                           console.log('error')
                           return res.json(err);
-
                         } else {
                           db.query(`INSERT INTO public."GMS_WorkflowProgram"
                           ("WorkflowProgram_ProgramID", "Businessunit_ID", "Organisation_ID",
@@ -3971,9 +3509,7 @@ app.post('/programadd/:createdby', (req, res) => {
 
 app.get('/program/:id', (req, res) => {
   const id = req.params.id;
-
   console.log("/program/:id", id);
-
   db.query(`select * from public."GMS_Program" where "Program_ID" = $1`, [id], (err, result) => {
     if (err) return res.json(err);
     return res.json(result.rows);
@@ -3983,12 +3519,9 @@ app.get('/program/:id', (req, res) => {
 
 
 app.put('/programedit/:modifiedby/:id', (req, res) => {
-
   const ProgId = req.params.id;
   const modifiedby = req.params.modifiedby;
-
   console.log("/programedit/:modifiedby/:id", req.body.Program_Code, req.body.Program_Name, req.body.Program_ModuleID, req.body.Program_Valid, modifiedby, Currdate, req.body.Program_Nav_Name, ProgId)
-
   db.query(`SELECT "Program_Code" FROM public."GMS_Program" WHERE trim(UPPER("Program_Code")) = trim(UPPER($1))  AND  "Program_ModuleID" = $2 AND "Program_ID" != $3`, [req.body.Program_Code, req.body.Program_ModuleID, ProgId], (err1, result1) => {
     if (err1) {
       console.log('error1');
@@ -4005,7 +3538,6 @@ app.put('/programedit/:modifiedby/:id', (req, res) => {
             if (result1.rows.length > 0) {
               return res.json({ message: 'Name already exists' });
             } else {
-
               db.query(`SELECT "Program_Nav_Name" FROM public."GMS_Program" WHERE trim(UPPER("Program_Nav_Name")) = trim(UPPER($1)) AND  "Program_ModuleID" = $2 and "Program_ID" != $3`, [req.body.Program_Nav_Name, req.body.Program_ModuleID, ProgId], (err1, result1) => {
                 if (err1) {
                   console.log('error2');
@@ -4014,7 +3546,6 @@ app.put('/programedit/:modifiedby/:id', (req, res) => {
                   if (result1.rows.length > 0) {
                     return res.json({ message: 'Display Name already exists' });
                   } else {
-
                     db.query(`update public."GMS_Program" set "Program_Code" = $1, "Program_Name" = $2, "Program_ModuleID" = $3, "Program_Valid" = $4, "Program_Modified_BY" = $5, "Program_Modified_ON" = $6, "Program_Nav_Name" = $7 Where "Program_ID" = $8`,
                       [req.body.Program_Code, req.body.Program_Name, req.body.Program_ModuleID, req.body.Program_Valid, modifiedby, Currdate, req.body.Program_Nav_Name.trim(), ProgId], (err, result) => {
                         if (err) {
@@ -4023,7 +3554,6 @@ app.put('/programedit/:modifiedby/:id', (req, res) => {
                           return res.json(result);
                         }
                       })
-
                   }
                 }
               })
@@ -4039,7 +3569,6 @@ app.put('/programedit/:modifiedby/:id', (req, res) => {
 
 app.get('/moduleactive', (req, res) => {
   db.query(`SELECT * FROM public."GMS_Module" where "Module_Valid" = true and "Module_Application" = 'GMS' order by "Module_ID"`, (error, results) => {
-
     if (error) {
       console.error('Error executing query', error);
       res.status(500).json({ error });
@@ -4048,24 +3577,18 @@ app.get('/moduleactive', (req, res) => {
     }
   });
 });
-
-
 //////------------------ Program Ends Here------------------------------///////
-
-
 //////------------------ Roles Starts Here------------------------------///////
 
 
 
 app.get('/rolesload', (req, res) => {
-
   db.query(`SELECT *,
     CASE 
         WHEN "Roles_Status" IS TRUE THEN 'Active'
         WHEN "Roles_Status" IS FALSE THEN 'Inactive'
         ELSE 'Unknown' 
     END AS "Roles_Status_Converted" FROM public."GMS_Roles" Where "Roles_Application" ='GMS' order by "Roles_ID" desc`, (error, results) => {
-
     if (error) {
       console.error('Error executing query', error);
       res.status(500).json({ error });
@@ -4079,9 +3602,7 @@ app.get('/rolesload', (req, res) => {
 
 app.delete('/rolesdlt/:id', (req, res) => {
   const RoleID = req.params.id;
-
   console.log('/rolesdlt/:id', RoleID);
-
   db.query(`select a.* from public."GMS_Roles" a,
         public."GMS_Roleprograms" b
         where  b."RolePrograms_RoleID" = a."Roles_ID" and b."RolePrograms_Valid" = true and a."Roles_ID" = $1 `, [RoleID], (err, data) => {
@@ -4101,18 +3622,13 @@ app.delete('/rolesdlt/:id', (req, res) => {
       }
     }
   })
-
 });
 
 
 app.post('/rolesadd', (req, res) => {
-
-
   const name = req.body.Roles_RoleName
   const code = req.body.Roles_Code
-
   console.log('/rolesadd', req.body.Roles_Code, req.body.Roles_RoleName, req.body.Roles_Status, req.body.Roles_Created_BY, req.body.Roles_Application)
-
   db.query(`SELECT "Roles_Code" FROM public."GMS_Roles" WHERE trim(UPPER("Roles_Code")) = trim(UPPER($1))  AND "Roles_Application" ='GMS'`, [code], (err1, result1) => {
     if (err1) {
       console.log('error1');
@@ -4152,7 +3668,6 @@ app.post('/rolesadd', (req, res) => {
 app.get('/roles/:id', (req, res) => {
   const id = req.params.id;
   console.log('/roles/:id', id);
-
   db.query(`select * from public."GMS_Roles" where "Roles_ID" = $1`, [id], (err, result) => {
     if (err) return res.json(err);
     return res.json(result.rows);
@@ -4161,14 +3676,10 @@ app.get('/roles/:id', (req, res) => {
 
 
 app.put('/rolesedit/:id', (req, res) => {
-
-
   const RoleId = req.params.id;
   const name = req.body.Roles_RoleName
   const code = req.body.Roles_Code
-
   console.log('/rolesedit/:id', req.body.Roles_Code, req.body.Roles_RoleName, req.body.Roles_Status, req.body.Roles_Modified_BY, Currdate, req.body.Roles_Application, RoleId)
-
   db.query(`SELECT "Roles_Code" FROM public."GMS_Roles" WHERE trim(UPPER("Roles_Code")) = trim(UPPER($1)) AND "Roles_Application" ='GMS' AND "Roles_ID" != $2`, [code, RoleId], (err1, result1) => {
     if (err1) {
       console.log('error1');
@@ -4185,7 +3696,6 @@ app.put('/rolesedit/:id', (req, res) => {
             if (result1.rows.length > 0) {
               return res.json({ message: 'Name already exists' });
             } else {
-
               db.query(`update public."GMS_Roles" set "Roles_Code" = $1,"Roles_RoleName"=$2,"Roles_Status"=$3,"Roles_Modified_BY"=$4,"Roles_Modified_ON"=$5, "Roles_Application"=$6 Where "Roles_ID" = $7`,
                 [req.body.Roles_Code, req.body.Roles_RoleName, req.body.Roles_Status, req.body.Roles_Modified_BY, Currdate, req.body.Roles_Application, RoleId], (err, result) => {
                   if (err) {
@@ -4210,9 +3720,7 @@ app.put('/rolesedit/:id', (req, res) => {
 app.get('/rolecodecheck/:code', (req, res) => {
   //  console.log('insert')
   var code = req.params.code;
-
   console.log('/rolecodecheck/:code', code);
-
   db.query(`SELECT * FROM public."GMS_Roles" where  substring("Roles_Code",1,3)=$1`, [code], (error, results) => {
     console.log(res)
     if (error) {
@@ -4231,7 +3739,6 @@ app.get('/rolecodecheck/:code', (req, res) => {
     }
   });
   //console.log(code.toString())
-
 });
 
 
@@ -4240,7 +3747,6 @@ app.get('/rolecodecheck/:code', (req, res) => {
 app.get('/rolecodemaxnum/:code', (req, res) => {
   //  console.log('insert')
   var code = req.params.code;
-
   console.log('/rolecodemaxnum/:code', code);
   db.query(`select max(TO_NUMBER(substring("Roles_Code",4,2),'99')) as codemaxnum from public."GMS_Roles" where substring("Roles_Code",1,3) = $1`, [code], (error, results) => {
     console.log(res)
@@ -4252,18 +3758,12 @@ app.get('/rolecodemaxnum/:code', (req, res) => {
     }
   });
   //console.log(code.toString())
-
 });
-
 //////------------------ Roles Ends Here------------------------------///////
-
-
 //////------------------ RoleProgram Starts Here------------------------------///////
 
 
 app.get('/roleprorole/:bu/:ou', (req, res) => {
-
-
   console.log('/roleprorole/:bu/:ou', BU, OU);
   db.query(`SELECT * FROM public."GMS_Roles" where "Roles_Status" = $1 AND "Businessunit_ID" = $2 and "Organisation_ID" = $3`, [true, BU, OU], (error, results) => {
     if (error) {
@@ -4278,7 +3778,6 @@ app.get('/roleprorole/:bu/:ou', (req, res) => {
 
 
 app.get('/rolepromodule', (req, res) => {
-
   console.log('/rolepromodule')
   db.query(`SELECT * FROM public."GMS_Module" WHERE "Module_Valid" = 'true' AND "Module_Application"='GMS' order by "Module_ID"`, (error, results) => {
     if (error) {
@@ -4293,11 +3792,8 @@ app.get('/rolepromodule', (req, res) => {
 
 
 app.get('/roleproprogram/:modid', (req, res) => {
-
   const modid = req.params.modid
-
   console.log('/roleproprogram/:modid', modid);
-
   db.query(`select * from public."GMS_Program" where "Program_ModuleID" = $1 AND "Program_Valid" =$2 `, [modid, true], (error, results) => {
     if (error) {
       console.error('Error executing query', error);
@@ -4312,15 +3808,11 @@ app.get('/roleproprogram/:modid', (req, res) => {
 
 
 app.get('/progavail/:roleid/:modid', (req, res) => {
-
   const roleid = req.params.roleid
   const modid = req.params.modid
-
   console.log('/progavail/:roleid/:modid', roleid, modid)
-
   db.query(`select "RolePrograms_ID","RolePrograms_StatusCheck" From  public."GMS_Roleprograms"
       Where "RolePrograms_RoleID" =$1 AND "RolePrograms_Module_ID" =$2`, [roleid, modid], (error, results) => {
-
     if (error) {
       console.error('Error executing query', error);
       res.status(500).json({ error });
@@ -4338,37 +3830,28 @@ app.get('/progavail/:roleid/:modid', (req, res) => {
 
 
 app.post('/findprogid/:roleid/:modid', (req, res) => {
-
   const roleid = req.params.roleid
   const modid = req.params.modid
   console.log('/findprogid/:roleid/:modid', roleid, modid);
-
-
   db.query(`select "RolePrograms_ID","RolePrograms_StatusCheck" From  public."GMS_Roleprograms"
       Where "RolePrograms_RoleID" =$1 AND "RolePrograms_Module_ID" =$2`, [roleid, modid], (error, results) => {
-
     if (error) {
       console.error('Error executing query', error);
       res.status(500).json({ error });
     } else {
       console.log(results.rows)
       return res.json(results.rows)
-
     }
   });
 });
 
 
 app.get('/roleprodefault/:roleid/:modid', (req, res) => {
-
   const roleid = req.params.roleid
   const modid = req.params.modid
-
   console.log('/roleprodefault/:roleid/:modid', roleid, modid)
-
   db.query(`select "RolePrograms_ProgramID","RolePrograms_StatusCheck" From  public."GMS_Roleprograms"
       Where  "RolePrograms_RoleID" =$1 AND "RolePrograms_Module_ID" =$2`, [roleid, modid], (error, results) => {
-
     if (error) {
       console.error('Error executing query', error);
       res.status(500).json({ error });
@@ -4386,12 +3869,9 @@ app.post('/roleproadd/:proid/:check', (req, res) => {
   const createdby = req.params.createdby;
   const proid = req.params.proid;
   const check = req.params.check === 'true';
-
   const roleid = req.body.RolePrograms_RoleID;
   const modid = req.body.RolePrograms_Module_ID;
-
   console.log('/roleproadd/:proid/:check', proid, check, roleid, modid, req.body.RolePrograms_Created_BY)
-
   db.query(`SELECT * FROM public."GMS_Roleprograms" WHERE "RolePrograms_RoleID" = $1 AND "RolePrograms_Module_ID" = $2 AND "RolePrograms_ProgramID" =$3`, [roleid, modid, proid], (err, result) => {
     if (err) {
       console.error(err);
@@ -4400,7 +3880,6 @@ app.post('/roleproadd/:proid/:check', (req, res) => {
     if (result.rows.length > 0) {
       const existingRecord = result.rows[0];
       const oldUserRoleStatusCheck = existingRecord.RolePrograms_StatusCheck;
-
       if (!check && oldUserRoleStatusCheck) {
         db.query(`DELETE FROM public."GMS_Roleprograms" WHERE  "RolePrograms_RoleID" = $1 AND "RolePrograms_Module_ID" = $2 AND "RolePrograms_ProgramID" =$3`, [roleid, modid, proid],
           (error1, result1) => {
@@ -4413,7 +3892,6 @@ app.post('/roleproadd/:proid/:check', (req, res) => {
           }
         );
       } else if (check && !oldUserRoleStatusCheck) {
-
         db.query(`INSERT INTO public."GMS_Roleprograms"("RolePrograms_RoleID", "RolePrograms_Module_ID", "RolePrograms_ProgramID", "RolePrograms_StatusCheck", "RolePrograms_Valid", "RolePrograms_Created_BY", "RolePrograms_Created_ON") VALUES($1, $2, $3, $4, $5, $6, $7)`,
           [roleid, modid, proid, check, true, req.body.RolePrograms_Created_BY, Currdate], (error2, result2) => {
             if (error2) {
@@ -4447,18 +3925,12 @@ app.post('/roleproadd/:proid/:check', (req, res) => {
   }
   );
 });
-
 //////------------------ RoleProgram Ends Here------------------------------///////
-
-
-
 //////------------------  Userrole Starts Here------------------------------///////
 
 app.get('/userrole', (req, res) => {
-
   console.log('/userrole')
   db.query(`SELECT * FROM public."userrole_vw" order by "UserRole_ID"`, (error, results) => {
-
     if (error) {
       console.error('Error executing query', error);
       res.status(500).json({ error });
@@ -4471,14 +3943,9 @@ app.get('/userrole', (req, res) => {
 
 app.get('/userroledefault/:roleid', (req, res) => {
   const roleid = req.params.roleid
-
-
-
   console.log('/userroledefault/:roleid', roleid);
-
   db.query(`select "User_ID","UserRole_StatusCheck" From  public."GMS_UserRoles"
     Where "Role_ID" =$1`, [roleid], (error, results) => {
-
     if (error) {
       console.error('Error executing query', error);
       res.status(500).json({ error });
@@ -4491,11 +3958,9 @@ app.get('/userroledefault/:roleid', (req, res) => {
 
 app.get('/useravail/:roleid', (req, res) => {
   const roleid = req.params.roleid
-
   console.log('/useravail/:roleid/', roleid)
   db.query(`select "User_ID","UserRole_StatusCheck" From  public."GMS_UserRoles"
       Where "Role_ID" =$1`, [roleid], (error, results) => {
-
     if (error) {
       console.error('Error executing query', error);
       res.status(500).json({ error });
@@ -4514,11 +3979,9 @@ app.get('/useravail/:roleid', (req, res) => {
 
 app.post('/finduserid/:roleid', (req, res) => {
   const roleid = req.params.roleid
-
   console.log('finduserid', roleid)
   db.query(`select "User_ID","UserRole_StatusCheck" From  public."GMS_UserRoles"
       Where "Role_ID" =$1`, [roleid], (error, results) => {
-
     if (error) {
       console.error('Error executing query', error);
       res.status(500).json({ error });
@@ -4533,7 +3996,6 @@ app.post('/finduserid/:roleid', (req, res) => {
 
 
 app.get('/userroleroles', (req, res) => {
-
   console.log('/userroleroles')
   db.query(`SELECT * FROM public."GMS_Roles" where "Roles_Status" = $1 AND "Roles_Application"='GMS'`, [true], (error, results) => {
     if (error) {
@@ -4550,24 +4012,11 @@ app.get('/userroleroles', (req, res) => {
 
 app.get('/userroleuser', (req, res) => {
   console.log('/userroleuser')
-  db.query(`
-    SELECT 
-      "Users_ID",
-      "Users_LoginID",
-      "Users_email"     AS "Users_Email",
-      "Users_Mobile"::text AS "Users_Mobile",   -- cast to text
-      NULL              AS "Users_DeptID",
-      "Users_IsLocked"
-    FROM public."GMS_User"
-    WHERE "Users_IsLocked" = $1
-
-    UNION ALL
-
-    SELECT 
+  db.query(`SELECT 
       adm_users_id      AS "Users_ID",
       adm_users_loginid AS "Users_LoginID",
       adm_users_email   AS "Users_Email",
-      adm_users_mobile::text AS "Users_Mobile", -- cast to text
+      adm_users_mobile::text AS "Users_Mobile",
       adm_users_deptid  AS "Users_DeptID",
       adm_users_islocked AS "Users_IsLocked"
     FROM public.adm_user_t
@@ -4585,23 +4034,18 @@ app.get('/userroleuser', (req, res) => {
 
 
 app.post('/userroleadd/:userid/:check', (req, res) => {
-
   const userid = req.params.userid;
   const check = req.params.check === 'true';
   const roleid = req.body.Role_ID
-
   console.log('/userroleadd/:userid/:check', roleid, userid, true, Currdate, req.body.created_by, check)
-
   db.query(`SELECT * FROM public."GMS_UserRoles" WHERE "Role_ID" = $1 AND "User_ID" = $2`, [roleid, userid], (err, result) => {
     if (err) {
       console.error(err);
       return res.status(500).json({ err });
     }
-
     if (result.rows.length > 0) {
       const existingRecord = result.rows[0];
       const oldUserRoleStatusCheck = existingRecord.UserRole_StatusCheck;
-
       if (!check && oldUserRoleStatusCheck) {
         db.query(`DELETE FROM public."GMS_UserRoles" WHERE  "Role_ID" = $1 AND "User_ID" = $2`, [roleid, userid],
           (error1, result1) => {
@@ -4647,567 +4091,13 @@ app.post('/userroleadd/:userid/:check', (req, res) => {
   }
   );
 });
-
-
-
-
 //////------------------  Userrole Ends Here------------------------------///////
-
-
-
-//////------------------ User Starts Here------------------------------///////
-
-app.get('/users', (req, res) => {
-  db.query(`SELECT *,
-      CASE 
-        WHEN "Users_Status" IS TRUE THEN 'Active'
-        WHEN "Users_Status" IS FALSE THEN 'Inactive'
-        ELSE 'Unknown' 
-    END AS "Users_Status_Converted" 
-     FROM public."GMS_User" order by "Users_ID" desc`, (error, results) => {
-
-    if (error) {
-      console.error('Error executing query', error);
-      res.status(500).json({ error });
-    } else {
-      res.json(results.rows);
-    }
-  });
-});
-
-
-app.post('/errorcheck/:createdby', (req, res) => {
-  const userlogid = req.body.Users_LoginID;
-  const usermailid = req.body.Users_email;
-  const usersmob = req.body.Users_Mobile;
-  const plainPassword = req.body.Users_Password;
-
-  console.log('/errorcheck/:createdby', userlogid, usermailid, usersmob, plainPassword);
-
-  db.query(`SELECT "Users_LoginID" FROM public."GMS_User" WHERE trim(UPPER("Users_LoginID")) = trim(UPPER($1))`, [userlogid], (err1, result1) => {
-    if (err1) {
-      console.log('error1');
-      return res.json(err1);
-    } else {
-      if (result1.rows.length > 0) {
-        return res.json({ message: 'Loginid already exists' });
-      } else {
-        db.query(`SELECT "Users_email" FROM public."GMS_User" WHERE trim(UPPER("Users_email")) = trim(UPPER($1))`, [usermailid], (err1, result1) => {
-          if (err1) {
-            console.log('error12');
-            return res.json(err1);
-          } else {
-            if (result1.rows.length > 0) {
-              return res.json({ message: 'Emailid already exists' });
-            } else {
-              db.query(`SELECT "Users_Mobile" FROM public."GMS_User" WHERE trim(UPPER("Users_Mobile")) = trim(UPPER($1))`, [usersmob], (err1, result1) => {
-                if (err1) {
-                  console.log('error13');
-                  return res.json(err1);
-                } else {
-                  if (result1.rows.length > 0) {
-                    return res.json({ message: 'Mobile Number already exists' });
-                  } else {
-                    return res.json("Added success");
-                  }
-                }
-              });
-            }
-          }
-        });
-      }
-    }
-  });
-});
-
-
-app.get('/edit_users/:id', (req, res) => {
-  const id = req.params.id;
-
-  console.log('/edit_users/:id', id)
-  db.query(`select * from public."GMS_User" where "Users_ID" = $1`, [id], (err, result) => {
-    if (err) return res.json(err);
-    return res.json(result.rows);
-  });
-});
-
-
-app.post('/useradd/:createdby', (req, res) => {
-  const createdby = req.params.createdby;
-  const userlogid = req.body.Users_LoginID;
-  const usermailid = req.body.Users_email;
-  const usersmob = req.body.Users_Mobile;
-
-  console.log('/useradd/:createdby', req.body.Users_LoginID, req.body.Users_Password, req.body.Users_email, req.body.Users_Title,
-    req.body.Users_FirstName, req.body.Users_LastName, req.body.Users_Mobile, req.body.Users_LastUpdatedDate,
-    req.body.Users_IsLocked, req.body.Users_PasswordExpireDate, req.body.Users_PasswordExpiryDays,
-    req.body.Users_Lock_PastExpiration, req.body.Users_KeepPasswordHistory, req.body.Users_KeepPasswordHistoryCount,
-    req.body.Users_LockOnFailedLogin, req.body.Users_LockAfterFailedLogins, req.body.Users_Password_MinLength,
-    req.body.Users_EnforcePasswordComplexity, req.body.Users_RequiresPasswordChange, req.body.Users_LastActivityDate,
-    true, Currdate, createdby)
-
-  db.query(`SELECT "Users_LoginID" FROM public."GMS_User" WHERE trim(UPPER("Users_LoginID")) = trim(UPPER($1))`, [userlogid], (err1, result1) => {
-    if (err1) {
-      console.log('error1');
-      return res.json(err1);
-    } else {
-      if (result1.rows.length > 0) {
-        return res.json({ message: 'Loginid already exists' });
-      } else {
-        db.query(`SELECT "Users_email" FROM public."GMS_User" WHERE trim(UPPER("Users_email")) = trim(UPPER($1)) `, [usermailid], (err1, result1) => {
-          if (err1) {
-            console.log('error12');
-            return res.json(err1);
-          } else {
-            if (result1.rows.length > 0) {
-              return res.json({ message: 'Emailid already exists' });
-            } else {
-              db.query(`SELECT "Users_Mobile" FROM public."GMS_User" WHERE trim(UPPER("Users_Mobile")) = trim(UPPER($1))`, [usersmob], (err1, result1) => {
-                if (err1) {
-                  console.log('error13');
-                  return res.json(err1);
-                } else {
-                  if (result1.rows.length > 0) {
-                    return res.json({ message: 'Mobile Number already exists' });
-                  } else {
-                    db.query(`INSERT INTO public."GMS_User"("Users_LoginID", "Users_Password", "Users_email", "Users_Title", "Users_FirstName",
-                         "Users_LastName", "Users_Mobile", "Users_LastUpdatedDate", "Users_IsLocked", "Users_PasswordExpireDate",
-                          "Users_PasswordExpiryDays", "Users_Lock_PastExpiration", "Users_KeepPasswordHistory", "Users_KeepPasswordHistoryCount",
-                           "Users_LockOnFailedLogin", "Users_LockAfterFailedLogins", "Users_Password_MinLength", "Users_EnforcePasswordComplexity",
-                           "Users_RequiresPasswordChange", "Users_LastActivityDate", "Users_Status", created_on, created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
-                      [req.body.Users_LoginID, req.body.Users_Password, req.body.Users_email, req.body.Users_Title,
-                      req.body.Users_FirstName, req.body.Users_LastName, req.body.Users_Mobile, req.body.Users_LastUpdatedDate,
-                      req.body.Users_IsLocked, req.body.Users_PasswordExpireDate, req.body.Users_PasswordExpiryDays,
-                      req.body.Users_Lock_PastExpiration, req.body.Users_KeepPasswordHistory, req.body.Users_KeepPasswordHistoryCount,
-                      req.body.Users_LockOnFailedLogin, req.body.Users_LockAfterFailedLogins, req.body.Users_Password_MinLength,
-                      req.body.Users_EnforcePasswordComplexity, req.body.Users_RequiresPasswordChange, req.body.Users_LastActivityDate,
-                        true, Currdate, createdby], (err, result) => {
-                          if (err) {
-                            console.log('error1' + err)
-                            return res.json(err);
-                          }
-                          else {
-
-                            db.query(`select max("Users_ID") as users_id from public."GMS_User"`, (error, results) => {
-                              if (error) {
-                                console.log('error');
-                                return res.json(error);
-                              } else {
-                                //return res.json("Added");
-
-                                const Users_ID = results.rows[0].users_id
-                                console.log('max', Users_ID);
-                                db.query(`INSERT INTO public."GMS_User_Audit"("Users_ID","Users_LoginID", "Users_Password", "Users_email", "Users_Title", "Users_FirstName",
-                         "Users_LastName", "Users_Mobile", "Users_LastUpdatedDate", "Users_IsLocked", "Users_PasswordExpireDate",
-                          "Users_PasswordExpiryDays", "Users_Lock_PastExpiration", "Users_KeepPasswordHistory", "Users_KeepPasswordHistoryCount",
-                           "Users_LockOnFailedLogin", "Users_LockAfterFailedLogins", "Users_Password_MinLength", "Users_EnforcePasswordComplexity",
-                           "Users_RequiresPasswordChange", "Users_LastActivityDate", "Users_Status", created_on, created_by, modified_on, modified_by,"Users_Audit_Remarks")
-                           select "Users_ID","Users_LoginID", "Users_Password", "Users_email", "Users_Title", "Users_FirstName",
-                         "Users_LastName", "Users_Mobile", "Users_LastUpdatedDate", "Users_IsLocked", "Users_PasswordExpireDate",
-                          "Users_PasswordExpiryDays", "Users_Lock_PastExpiration", "Users_KeepPasswordHistory", "Users_KeepPasswordHistoryCount",
-                           "Users_LockOnFailedLogin", "Users_LockAfterFailedLogins", "Users_Password_MinLength", "Users_EnforcePasswordComplexity",
-                           "Users_RequiresPasswordChange", "Users_LastActivityDate", "Users_Status", created_on, created_by, modified_on, modified_by,'Inserted In GMS'
-                                    FROM public."GMS_User" where "Users_ID" =$1`, [Users_ID], (err, result) => {
-                                  if (err) {
-                                    console.log('error2');
-                                    return res.json(error);
-                                  } else {
-                                    return res.json("Added successfully");
-                                  }
-                                })
-                              }
-                            })
-                          }
-                        });
-                  }
-                }
-              });
-            }
-          }
-        });
-      }
-    }
-  });
-});
-
-
-
-app.get('/edit_users/:id', (req, res) => {
-  const id = req.params.id;
-
-  console.log('/edit_users/:id', id);
-
-  db.query(`select * from public."GMS_User" where "Users_ID" = $1`, [id], (err, result) => {
-    if (err) return res.json(err);
-    return res.json(result.rows);
-  });
-});
-
-
-
-
-app.put('/useredit/:modifiedby/:id', (req, res) => {
-
-  const UserId = req.params.id;
-  const modifiedby = req.params.modifiedby;
-  const userlogid = req.body.Users_LoginID
-  const usermailid = req.body.Users_email
-  const usersmob = req.body.Users_Mobile
-
-  console.log('/useredit/:modifiedby/:id', req.body.Users_LoginID, req.body.Users_Password, req.body.Users_email, req.body.Users_Title,
-    req.body.Users_FirstName, req.body.Users_LastName, req.body.Users_Mobile, req.body.Users_LastUpdatedDate,
-    req.body.Users_IsLocked, req.body.Users_PasswordExpireDate, req.body.Users_PasswordExpiryDays,
-    req.body.Users_Lock_PastExpiration, req.body.Users_KeepPasswordHistory, req.body.Users_KeepPasswordHistoryCount,
-    req.body.Users_LockOnFailedLogin, req.body.Users_LockAfterFailedLogins, req.body.Users_Password_MinLength,
-    req.body.Users_EnforcePasswordComplexity, req.body.Users_RequiresPasswordChange, req.body.Users_LastActivityDate,
-    req.body.Users_Status, Currdate, modifiedby)
-
-  db.query(`SELECT "Users_LoginID" FROM public."GMS_User" WHERE trim(UPPER("Users_LoginID")) = trim(UPPER($1)) AND "Users_ID" != $2`, [userlogid, UserId], (err1, result1) => {
-    if (err1) {
-      console.log('error1');
-      return res.json(err1);
-    } else {
-      if (result1.rows.length > 0) {
-        return res.json({ message: 'Loginid already exists' });
-      } else {
-        db.query(`SELECT "Users_email" FROM public."GMS_User" WHERE trim(UPPER("Users_email")) = trim(UPPER($1)) AND "Users_ID" != $2`, [usermailid, UserId], (err1, result1) => {
-          if (err1) {
-            console.log('error1');
-            return res.json(err1);
-          } else {
-            if (result1.rows.length > 0) {
-              return res.json({ message: 'Emailid already exists' });
-            } else {
-              db.query(`SELECT "Users_Mobile" FROM public."GMS_User" WHERE trim(UPPER("Users_Mobile")) = trim(UPPER($1)) AND "Users_ID" != $2`, [usersmob, UserId], (err1, result1) => {
-                if (err1) {
-                  console.log('error1');
-                  return res.json(err1);
-                } else {
-                  if (result1.rows.length > 0) {
-                    return res.json({ message: 'Mobile Number already exists' });
-                  } else {
-                    db.query(`update public."GMS_User" SET  "Users_LoginID"=$1, "Users_Password"=$2, "Users_email"=$3, "Users_Title"=$4,
-                              "Users_FirstName"=$5, "Users_LastName"=$6, "Users_Mobile"=$7, "Users_LastUpdatedDate"=$8, "Users_IsLocked"=$9,
-                              "Users_PasswordExpireDate"=$10, "Users_PasswordExpiryDays"=$11, "Users_Lock_PastExpiration"=$12,
-                              "Users_KeepPasswordHistory"=$13, "Users_KeepPasswordHistoryCount"=$14, "Users_LockOnFailedLogin"=$15,
-                              "Users_LockAfterFailedLogins"=$16, "Users_Password_MinLength"=$17, "Users_EnforcePasswordComplexity"=$18,
-                              "Users_RequiresPasswordChange"=$19, "Users_LastActivityDate"=$20, "Users_Status"=$21,
-                              modified_on=$22, modified_by=$23 Where "Users_ID" = $24`,
-                      [req.body.Users_LoginID, req.body.Users_Password, req.body.Users_email, req.body.Users_Title,
-                      req.body.Users_FirstName, req.body.Users_LastName, req.body.Users_Mobile, req.body.Users_LastUpdatedDate,
-                      req.body.Users_IsLocked, req.body.Users_PasswordExpireDate, req.body.Users_PasswordExpiryDays,
-                      req.body.Users_Lock_PastExpiration, req.body.Users_KeepPasswordHistory, req.body.Users_KeepPasswordHistoryCount,
-                      req.body.Users_LockOnFailedLogin, req.body.Users_LockAfterFailedLogins, req.body.Users_Password_MinLength,
-                      req.body.Users_EnforcePasswordComplexity, req.body.Users_RequiresPasswordChange, req.body.Users_LastActivityDate,
-                      req.body.Users_Status, Currdate, modifiedby, UserId], (err, result) => {
-                        if (err) {
-                          console.log("error")
-                          return res.json({ Message: "error" })
-                        } else {
-                          db.query(`select max("Users_ID") as users_id from public."GMS_User"`, (error, results) => {
-                            if (error) {
-                              console.log('error');
-                              return res.json(error);
-                            } else {
-                              const Users_ID = results.rows[0].users_id
-                              db.query(`INSERT INTO public."GMS_User_Audit"("Users_ID","Users_LoginID", "Users_Password", "Users_email", "Users_Title", "Users_FirstName",
-                       "Users_LastName", "Users_Mobile", "Users_LastUpdatedDate", "Users_IsLocked", "Users_PasswordExpireDate",
-                        "Users_PasswordExpiryDays", "Users_Lock_PastExpiration", "Users_KeepPasswordHistory", "Users_KeepPasswordHistoryCount",
-                         "Users_LockOnFailedLogin", "Users_LockAfterFailedLogins", "Users_Password_MinLength", "Users_EnforcePasswordComplexity",
-                        "Users_RequiresPasswordChange", "Users_LastActivityDate", "Users_Status", created_on, created_by, modified_on, modified_by,"Users_Audit_Remarks")
-                         select "Users_ID","Users_LoginID", "Users_Password", "Users_email", "Users_Title", "Users_FirstName",
-                       "Users_LastName", "Users_Mobile", "Users_LastUpdatedDate", "Users_IsLocked", "Users_PasswordExpireDate",
-                        "Users_PasswordExpiryDays", "Users_Lock_PastExpiration", "Users_KeepPasswordHistory", "Users_KeepPasswordHistoryCount",
-                         "Users_LockOnFailedLogin", "Users_LockAfterFailedLogins", "Users_Password_MinLength", "Users_EnforcePasswordComplexity",
-                         "Users_RequiresPasswordChange", "Users_LastActivityDate", "Users_Status", created_on, created_by, modified_on, modified_by,'Updated In GMS'
-                                  FROM public."GMS_User" where "Users_ID" =$1`, [Users_ID], (err, result) => {
-                                if (err) {
-                                  console.log('error233');
-                                  return res.json(error);
-                                } else {
-                                  return res.json("Added successfully");
-                                }
-                              })
-                            }
-                          })
-                        }
-                      })
-                  }
-                }
-              })
-            }
-          }
-        })
-      }
-    }
-  })
-});
-
-
-
-
-
-app.put('/errorcheckedit/:modifiedby/:id', (req, res) => {
-
-  const UserId = req.params.id;
-  const userlogid = req.body.Users_LoginID
-  const usermailid = req.body.Users_email
-  const usersmob = req.body.Users_Mobile
-
-  console.log('/errorcheckedit/:modifiedby/:id', req.body.Users_LoginID, req.body.Users_Password)
-
-  db.query(`SELECT "Users_LoginID" FROM public."GMS_User" WHERE trim(UPPER("Users_LoginID")) = trim(UPPER($1)) AND "Users_ID" != $2`, [userlogid, UserId], (err1, result1) => {
-    if (err1) {
-      console.log('error1');
-      return res.json(err1);
-    } else {
-      if (result1.rows.length > 0) {
-        return res.json({ message: 'Loginid already exists' });
-      } else {
-        db.query(`SELECT "Users_email" FROM public."GMS_User" WHERE trim(UPPER("Users_email")) = trim(UPPER($1)) AND "Users_ID" != $2`, [usermailid, UserId], (err1, result1) => {
-          if (err1) {
-            console.log('error1');
-            return res.json(err1);
-          } else {
-            if (result1.rows.length > 0) {
-              return res.json({ message: 'Emailid already exists' });
-            } else {
-              db.query(`SELECT "Users_Mobile" FROM public."GMS_User" WHERE trim(UPPER("Users_Mobile")) = trim(UPPER($1)) AND "Users_ID" != $2`, [usersmob, UserId], (err1, result1) => {
-                if (err1) {
-                  console.log('error1');
-                  return res.json(err1);
-                } else {
-                  if (result1.rows.length > 0) {
-                    return res.json({ message: 'Mobile Number already exists' });
-                  } else {
-                    return res.json("Added success");
-                  }
-                }
-              });
-            }
-          }
-        });
-      }
-    }
-  });
-});
-
-
-
-
-
-
-app.delete('/user/:id', (req, res) => {
-
-  const UserID = req.params.id;
-  console.log('/user/:id', UserID);
-
-  db.query(`
-       select a.* from public."GMS_User" a,  public."GMS_UserRoles" b
-        where  b."User_ID" = a."Users_ID" and b."UserRole_StatusCheck" = true and a."Users_ID" = $1 `, [UserID], (err, data) => {
-    if (err) {
-      console.log('query Error1')
-    } else {
-      if ((data.rows).length >= 1) {
-        return res.json({ Status: "Error", Error: "Child Record Present - Cannot be Deleted" });
-      } else {
-
-        db.query(`INSERT INTO public."GMS_User_Audit"("Users_ID","Users_LoginID", "Users_Password", "Users_email", "Users_Title", "Users_FirstName",
-                  "Users_LastName", "Users_Mobile", "Users_LastUpdatedDate", "Users_IsLocked", "Users_PasswordExpireDate",
-                  "Users_PasswordExpiryDays", "Users_Lock_PastExpiration", "Users_KeepPasswordHistory", "Users_KeepPasswordHistoryCount",
-                  "Users_LockOnFailedLogin", "Users_LockAfterFailedLogins", "Users_Password_MinLength", "Users_EnforcePasswordComplexity",
-                  "Users_RequiresPasswordChange", "Users_LastActivityDate", "Users_Status", created_on, created_by, modified_on, modified_by,"Users_Audit_Remarks")
-                  select "Users_ID","Users_LoginID", "Users_Password", "Users_email", "Users_Title", "Users_FirstName",
-                  "Users_LastName", "Users_Mobile", "Users_LastUpdatedDate", "Users_IsLocked", "Users_PasswordExpireDate",
-                  "Users_PasswordExpiryDays", "Users_Lock_PastExpiration", "Users_KeepPasswordHistory", "Users_KeepPasswordHistoryCount",
-                  "Users_LockOnFailedLogin", "Users_LockAfterFailedLogins", "Users_Password_MinLength", "Users_EnforcePasswordComplexity",
-                  "Users_RequiresPasswordChange", "Users_LastActivityDate", "Users_Status", created_on, created_by, modified_on, modified_by,'Deleted In GMS'
-                          FROM public."GMS_User" where "Users_ID" =$1`, [UserID])
-        db.query(`Delete FROM public."GMS_User" where "Users_ID" = $1`, [UserID], (error, result) => {
-
-          if (error) {
-            console.log('query Error')
-          } else {
-            return res.json({ Status: "Success" });
-
-          }
-        })
-      }
-    }
-  }
-  )
-}
-);
-
-
-
-
-app.post('/currpasswordcheck/:editid', (req, res) => {
-
-  const editid = req.params.editid;
-  const modifiedby = req.body.modifiedby;
-  const pass = req.body.Current_Pwd
-
-  console.log('/currpasswordcheck/:editid', editid, pass + ' pc ', modifiedby)
-
-  db.query(`SELECT "Users_Password" FROM public."GMS_User" WHERE "Users_ID" =$1`, [editid], (statusErr, results) => {
-    if (statusErr) {
-      console.error('Error executing query', statusErr);
-      return res.status(500).json({ error: statusErr });
-    }
-    console.log(results)
-    var Pass = results.rows[0].Users_Password;
-
-    const decryptedPassword = decryptPassword(Pass);
-    if (decryptedPassword !== pass) {
-      console.log('status check');
-      return res.json({ message: 'Wrong Pass' });
-    } else {
-
-      res.json(results.rows);
-      console.log(results.rows)
-    }
-  }
-  )
-}
-);
-
-
-
-app.post('/passwordchange/:editid', (req, res) => {
-
-  const editid = req.params.editid;
-  const modifiedby = req.body.modifiedby;
-  const pass = req.body.Confirm_Pwd
-
-  console.log('/passwordchange/:editid', editid + ' pc1 ')
-  console.log('/passwordchange/:editid', pass)
-
-  db.query(`UPDATE public."GMS_User" SET
-     "Users_Password"=$1 WHERE "Users_ID" =$2`, [pass, editid], (err, results) => {
-    if (err) {
-      return res.json(err);
-    } else {
-
-      return res.json("Added success");
-    }
-  })
-});
-
-
-
-
-
-
-app.get('/edit_profile/:id', (req, res) => {
-  const id = req.params.id;
-
-  console.log('/edit_profile/:id', id)
-  db.query(`select * from public."userrole_vw" where "User_ID" = $1`, [id], (err, result) => {
-    if (err) return res.json(err);
-    return res.json(result.rows);
-  });
-});
-
-
-
-
-app.put('/profileedit/:modifiedby/:id', (req, res) => {
-
-  const UserId = req.params.id;
-  const modifiedby = req.params.modifiedby;
-  const userlogid = req.body.Users_LoginID
-  const usermailid = req.body.Users_email
-  const usersmob = req.body.Users_Mobile
-
-  console.log('/profileedit/:modifiedby/:id', req.body.Users_LoginID, req.body.Users_Password, req.body.Users_email, req.body.Users_Title,
-    req.body.Users_FirstName, req.body.Users_LastName, req.body.Users_Mobile, Currdate, modifiedby, UserId)
-
-  db.query(`SELECT "Users_LoginID" FROM public."GMS_User" WHERE trim(UPPER("Users_LoginID")) = trim(UPPER($1)) AND "Users_ID" != $2`, [userlogid, UserId], (err1, result1) => {
-    if (err1) {
-      console.log('error1');
-      return res.json(err1);
-    } else {
-      if (result1.rows.length > 0) {
-        return res.json({ message: 'Loginid already exists' });
-      } else {
-        db.query(`SELECT "Users_email" FROM public."GMS_User" WHERE trim(UPPER("Users_email")) = trim(UPPER($1)) AND "Users_ID" != $2`, [usermailid, UserId], (err1, result1) => {
-          if (err1) {
-            console.log('error1');
-            return res.json(err1);
-          } else {
-            if (result1.rows.length > 0) {
-              return res.json({ message: 'Emailid already exists' });
-            } else {
-              db.query(`SELECT "Users_Mobile" FROM public."GMS_User" WHERE trim(UPPER("Users_Mobile")) = trim(UPPER($1)) AND "Users_ID" != $2`, [usersmob, UserId], (err1, result1) => {
-                if (err1) {
-                  console.log('error1');
-                  return res.json(err1);
-                } else {
-                  if (result1.rows.length > 0) {
-                    return res.json({ message: 'Mobile Number already exists' });
-                  } else {
-                    db.query(`update public."GMS_User" SET  "Users_LoginID"=$1, "Users_Password"=$2, "Users_email"=$3, "Users_Title"=$4,
-                              "Users_FirstName"=$5, "Users_LastName"=$6, "Users_Mobile"=$7, 
-                              modified_on=$8, modified_by=$9 Where "Users_ID" = $10`,
-                      [req.body.Users_LoginID, req.body.Users_Password, req.body.Users_email, req.body.Users_Title,
-                      req.body.Users_FirstName, req.body.Users_LastName, req.body.Users_Mobile, Currdate, modifiedby, UserId], (err, result) => {
-                        if (err) {
-                          console.log("error123")
-                          return res.json({ Message: "error" })
-                        } else {
-                          db.query(`select max("Users_ID") as users_id from public."GMS_User"`, (error, results) => {
-                            if (error) {
-                              console.log('error');
-                              return res.json(error);
-                            } else {
-                              const Users_ID = results.rows[0].users_id
-                              console.log('max', Users_ID);
-                              db.query(`INSERT INTO public."GMS_User_Audit"("Users_ID","Users_LoginID", "Users_Password", "Users_email", "Users_Title", "Users_FirstName",
-                       "Users_LastName", "Users_Mobile", "Users_LastUpdatedDate", "Users_IsLocked", "Users_PasswordExpireDate",
-                        "Users_PasswordExpiryDays", "Users_Lock_PastExpiration", "Users_KeepPasswordHistory", "Users_KeepPasswordHistoryCount",
-                         "Users_LockOnFailedLogin", "Users_LockAfterFailedLogins", "Users_Password_MinLength", "Users_EnforcePasswordComplexity",
-                        "Users_RequiresPasswordChange", "Users_LastActivityDate", "Users_Status", created_on, created_by, modified_on, modified_by,"Users_Audit_Remarks")
-                         select "Users_ID","Users_LoginID", "Users_Password", "Users_email", "Users_Title", "Users_FirstName",
-                       "Users_LastName", "Users_Mobile", "Users_LastUpdatedDate", "Users_IsLocked", "Users_PasswordExpireDate",
-                        "Users_PasswordExpiryDays", "Users_Lock_PastExpiration", "Users_KeepPasswordHistory", "Users_KeepPasswordHistoryCount",
-                         "Users_LockOnFailedLogin", "Users_LockAfterFailedLogins", "Users_Password_MinLength", "Users_EnforcePasswordComplexity",
-                         "Users_RequiresPasswordChange", "Users_LastActivityDate", "Users_Status", created_on, created_by, modified_on, modified_by,'Profile Updated In GMS'
-                                  FROM public."GMS_User" where "Users_ID" =$1`, [Users_ID], (err, result) => {
-                                if (err) {
-                                  console.log('error2');
-                                  return res.json(error);
-                                } else {
-                                  return res.json("Added successfully");
-                                }
-                              })
-                            }
-                          })
-                        }
-                      }
-                    )
-                  }
-                }
-              })
-            }
-          }
-        })
-      }
-    }
-  })
-})
-
-
-//////------------------  User Ends Here------------------------------///////
-
 ///---------------------User Role View Starts Here------------------------------//
 
 
 app.get('/UserRoleView', (req, res) => {
-
   console.log('/UserRoleView')
-  db.query(`select * FROM public.userrole_vw Where "Roles_Application"='GMS' order by "Users_LoginID"`, (error, results) => {
-
+  db.query(`select * FROM public.userrole_vw_new Where "Roles_Application"='GMS' order by "Users_LoginID"`, (error, results) => {
     if (error) {
       console.error('Error executing query', error);
       res.status(500).json({ error });
@@ -5219,7 +4109,6 @@ app.get('/UserRoleView', (req, res) => {
 
 
 app.get('/UserLoginID', (req, res) => {
-
   console.log('/UserLoginID')
   db.query(`select Distinct "Users_LoginID" FROM public."GMS_User" order by "Users_LoginID"`, (error, results) => {
     if (error) {
@@ -5243,22 +4132,14 @@ app.get('/userrole_filter/:login', (req, res) => {
     }
   });
 });
-
-
 ///---------------------User Role View Ends Here------------------------------//
-
-
 /* ------------------------------- LoggedIn Page Starts Here    -------------------------------------- */
 
 
 
 app.get('/programnavmas/:role', (req, res) => {
-
   const role = req.params.role
-
   console.log('/programnavmas/:role', role);
-
-
   db.query(` SELECT * FROM public."roleprogramroleprograme_vw" a
       join "GMS_Program" b on b."Program_ID" = a."RolePrograms_ProgramID"
       join "GMS_Module" c on c."Module_ID" = b."Program_ModuleID"
@@ -5276,17 +4157,13 @@ app.get('/programnavmas/:role', (req, res) => {
 
 
 app.get('/programnavtrn/:role', (req, res) => {
-
   const role = req.params.role
-
   console.log('/programnavtrn/:role', role);
-
   db.query(`SELECT * FROM public."roleprogramroleprograme_vw" a
       join "GMS_Program" b on b."Program_ID" = a."RolePrograms_ProgramID"
       join "GMS_Module" c on c."Module_ID" = b."Program_ModuleID"
       where  c."Module_Code" ='TRN' AND a."RolePrograms_StatusCheck" = 'true' 
       AND a."Roles_RoleName" = $1 and c."Module_Application"= 'GMS' AND a."Roles_Application" ='GMS' order by a."Program_ID" asc`, [role], (error, results) => {
-
     if (error) {
       console.error('Error executing query', error);
       res.status(500).json({ error });
@@ -5299,18 +4176,13 @@ app.get('/programnavtrn/:role', (req, res) => {
 
 
 app.get('/programnavvws/:role', (req, res) => {
-
   const role = req.params.role
-
   console.log('/programnavvws/:role', role);
-
-
   db.query(`SELECT * FROM public."roleprogramroleprograme_vw" a
       join "GMS_Program" b on b."Program_ID" = a."RolePrograms_ProgramID"
       join "GMS_Module" c on c."Module_ID" = b."Program_ModuleID"
       where  c."Module_Code" ='VWS' AND a."RolePrograms_StatusCheck" = 'true' 
       AND a."Roles_RoleName" = $1 and c."Module_Application"= 'GMS' AND a."Roles_Application" ='GMS' order by a."Program_ID" asc`, [role], (error, results) => {
-
     if (error) {
       console.error('Error executing query', error);
       res.status(500).json({ error });
@@ -5323,17 +4195,13 @@ app.get('/programnavvws/:role', (req, res) => {
 
 
 app.get('/programnavadm/:role', (req, res) => {
-
   const role = req.params.role
-
   console.log('/programnavadm/:role', role);
-
   db.query(`SELECT * FROM public."roleprogramroleprograme_vw" a
       join "GMS_Program" b on b."Program_ID" = a."RolePrograms_ProgramID"
       join "GMS_Module" c on c."Module_ID" = b."Program_ModuleID"
       where  c."Module_Code" ='ADM' AND a."RolePrograms_StatusCheck" = 'true'
        AND a."Roles_RoleName" = $1 and c."Module_Application"= 'GMS' AND a."Roles_Application" ='GMS' order by a."Program_ID" asc`, [role], (error, results) => {
-
     if (error) {
       console.error('Error executing query', error);
       res.status(500).json({ error });
@@ -5345,10 +4213,8 @@ app.get('/programnavadm/:role', (req, res) => {
 
 
 app.get('/programnavwfo/:role', (req, res) => {
-
   const role = req.params.role
   console.log('/programnavwfo/:role', role);
-
   db.query(`SELECT * FROM public."roleprogramroleprograme_vw" a
       join "GMS_Program" b on b."Program_ID" = a."RolePrograms_ProgramID"
       join "GMS_Module" c on c."Module_ID" = b."Program_ModuleID"
@@ -5367,17 +4233,13 @@ app.get('/programnavwfo/:role', (req, res) => {
 
 
 app.get('/programnavexp/:role', (req, res) => {
-
   const role = req.params.role
-
   console.log('/programnavexp/:role', role);
-
   db.query(`SELECT * FROM public."roleprogramroleprograme_vw" a
       join "GMS_Program" b on b."Program_ID" = a."RolePrograms_ProgramID"
       join "GMS_Module" c on c."Module_ID" = b."Program_ModuleID"
       where  c."Module_Code" ='EXP' AND a."RolePrograms_StatusCheck" = 'true'
        AND a."Roles_RoleName" = $1 and c."Module_Application"= 'GMS' AND a."Roles_Application" ='GMS' order by a."Program_ID" asc`, [role], (error, results) => {
-
     if (error) {
       console.error('Error executing query', error);
       res.status(500).json({ error });
@@ -5388,17 +4250,13 @@ app.get('/programnavexp/:role', (req, res) => {
 });
 
 app.get('/programnavimp/:role', (req, res) => {
-
   const role = req.params.role
-
   console.log('/programnavimp/:role', role);
-
   db.query(`SELECT * FROM public."roleprogramroleprograme_vw" a
       join "GMS_Program" b on b."Program_ID" = a."RolePrograms_ProgramID"
       join "GMS_Module" c on c."Module_ID" = b."Program_ModuleID"
       where  c."Module_Code" ='IMP' AND a."RolePrograms_StatusCheck" = 'true'
        AND a."Roles_RoleName" = $1 and c."Module_Application"= 'GMS' AND a."Roles_Application" ='GMS' order by a."Program_ID" asc`, [role], (error, results) => {
-
     if (error) {
       console.error('Error executing query', error);
       res.status(500).json({ error });
@@ -5407,14 +4265,11 @@ app.get('/programnavimp/:role', (req, res) => {
     }
   });
 });
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 // For OPE module
 app.get('/programnavope/:role', (req, res) => {
   const role = req.params.role;
   console.log('/programnavope/:role', role);
-
   db.query(`
     SELECT * FROM public."roleprogramroleprograme_vw" a
     JOIN "GMS_Program" b ON b."Program_ID" = a."RolePrograms_ProgramID"
@@ -5434,12 +4289,10 @@ app.get('/programnavope/:role', (req, res) => {
     }
   });
 });
-
 // For VISI module
 app.get('/programnavvisi/:role', (req, res) => {
   const role = req.params.role;
   console.log('/programnavvisi/:role', role);
-
   db.query(`
     SELECT * FROM public."roleprogramroleprograme_vw" a
     JOIN "GMS_Program" b ON b."Program_ID" = a."RolePrograms_ProgramID"
@@ -5459,12 +4312,10 @@ app.get('/programnavvisi/:role', (req, res) => {
     }
   });
 });
-
 // For LVE module
 app.get('/programnavlve/:role', (req, res) => {
   const role = req.params.role;
   console.log('/programnavlve/:role', role);
-
   db.query(`
     SELECT * FROM public."roleprogramroleprograme_vw" a
     JOIN "GMS_Program" b ON b."Program_ID" = a."RolePrograms_ProgramID"
@@ -5484,12 +4335,10 @@ app.get('/programnavlve/:role', (req, res) => {
     }
   });
 });
-
 // For MMM module
 app.get('/programnavmmm/:role', (req, res) => {
   const role = req.params.role;
   console.log('/programnavmmm/:role', role);
-
   db.query(`
     SELECT * FROM public."roleprogramroleprograme_vw" a
     JOIN "GMS_Program" b ON b."Program_ID" = a."RolePrograms_ProgramID"
@@ -5509,13 +4358,10 @@ app.get('/programnavmmm/:role', (req, res) => {
     }
   });
 });
-
-
 // For ATT module
 app.get('/programnavatt/:role', (req, res) => {
   const role = req.params.role;
   console.log('/programnavatt/:role', role);
-
   db.query(`
     SELECT * FROM public."roleprogramroleprograme_vw" a
     JOIN "GMS_Program" b ON b."Program_ID" = a."RolePrograms_ProgramID"
@@ -5535,12 +4381,10 @@ app.get('/programnavatt/:role', (req, res) => {
     }
   });
 });
-
 // For SETP module
 app.get('/programnavsetp/:role', (req, res) => {
   const role = req.params.role;
   console.log('/programnavsetp/:role', role);
-
   db.query(`
     SELECT * FROM public."roleprogramroleprograme_vw" a
     JOIN "GMS_Program" b ON b."Program_ID" = a."RolePrograms_ProgramID"
@@ -5560,15 +4404,11 @@ app.get('/programnavsetp/:role', (req, res) => {
     }
   });
 });
-
 /* ---------------------------------------     Loggedin page ends here    ------------------------------------------------- */
-
 /* ---------------------------------------     Vehicle APIs    ------------------------------------------------- */
-
 // Get All Vehicle Entries
 app.get('/vehicle-entry', (req, res) => {
   const fetchQuery = 'SELECT * FROM public."GMS_LogVehicleEntry" ORDER BY "GMS_id" DESC';
-
   db.query(fetchQuery, (err, result) => {
     if (err) {
       console.error("Error fetching all vehicle entries:", err);  // Log to terminal
@@ -5577,12 +4417,10 @@ app.get('/vehicle-entry', (req, res) => {
     return res.status(200).json(result.rows);
   });
 });
-
 // Get Single Vehicle Entry
 app.get('/Editvehicle-entry/:id', (req, res) => {
   const id = req.params.id;
   const fetchQuery = 'SELECT * FROM public."GMS_LogVehicleEntry" WHERE "GMS_id" = $1';
-
   db.query(fetchQuery, [id], (err, result) => {
     if (err) {
       console.error(`Error fetching vehicle entry with ID ${id}:`, err);
@@ -5594,7 +4432,6 @@ app.get('/Editvehicle-entry/:id', (req, res) => {
     return res.status(200).json(result.rows[0]);
   });
 });
-
 // Create New Vehicle Entry
 app.post('/AddNewvehicle-entry', async (req, res) => {
   const {
@@ -5609,7 +4446,6 @@ app.post('/AddNewvehicle-entry', async (req, res) => {
     GMS_security_check,
     GMS_attachments
   } = req.body;
-
   const requiredFields = [
     'GMS_vehicle_number',
     'GMS_driver_name',
@@ -5618,7 +4454,6 @@ app.post('/AddNewvehicle-entry', async (req, res) => {
     'GMS_entry_time',
     'GMS_status'
   ];
-
   const missingFields = requiredFields.filter(field => !req.body[field]);
   if (missingFields.length > 0) {
     console.warn("Missing required fields on insert:", missingFields);
@@ -5627,7 +4462,6 @@ app.post('/AddNewvehicle-entry', async (req, res) => {
       missingFields
     });
   }
-
   const insertQuery = `
     INSERT INTO public."GMS_LogVehicleEntry" (
       "GMS_vehicle_number", "GMS_driver_name", "GMS_driver_contact_number", 
@@ -5637,7 +4471,6 @@ app.post('/AddNewvehicle-entry', async (req, res) => {
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     RETURNING *
   `;
-
   try {
     const result = await db.query(insertQuery, [
       GMS_vehicle_number,
@@ -5652,7 +4485,6 @@ app.post('/AddNewvehicle-entry', async (req, res) => {
       GMS_attachments || '[]',
       null
     ]);
-
     return res.status(201).json({
       message: 'Vehicle entry created successfully',
       data: result.rows[0]
@@ -5665,7 +4497,6 @@ app.post('/AddNewvehicle-entry', async (req, res) => {
     });
   }
 });
-
 // Update Vehicle Entry
 app.put('/Editvehicle-entry/:id', async (req, res) => {
   const id = req.params.id;
@@ -5680,16 +4511,12 @@ app.put('/Editvehicle-entry/:id', async (req, res) => {
     GMS_status,
     GMS_security_check
   } = req.body;
-
   const checkQuery = 'SELECT * FROM public."GMS_LogVehicleEntry" WHERE "GMS_id" = $1';
-
   try {
     const checkResult = await db.query(checkQuery, [id]);
-
     if (checkResult.rowCount === 0) {
       return res.status(404).json({ error: 'Vehicle entry not found' });
     }
-
     const updateQuery = `
       UPDATE public."GMS_LogVehicleEntry"
       SET 
@@ -5707,7 +4534,6 @@ app.put('/Editvehicle-entry/:id', async (req, res) => {
       WHERE "GMS_id" = $10
       RETURNING *
     `;
-
     const result = await db.query(updateQuery, [
       GMS_vehicle_number || checkResult.rows[0].GMS_vehicle_number,
       GMS_driver_name || checkResult.rows[0].GMS_driver_name,
@@ -5720,7 +4546,6 @@ app.put('/Editvehicle-entry/:id', async (req, res) => {
       GMS_security_check || checkResult.rows[0].GMS_security_check,
       id
     ]);
-
     return res.status(200).json({
       message: 'Vehicle entry updated successfully',
       data: result.rows[0]
@@ -5733,26 +4558,20 @@ app.put('/Editvehicle-entry/:id', async (req, res) => {
     });
   }
 });
-
 // Update Vehicle Checkout
 app.put('/vehicle-entry/checkout/:id', async (req, res) => {
   const id = req.params.id;
   const { GMS_checkout_time } = req.body;
-
   if (!GMS_checkout_time) {
     console.warn(`Checkout failed: missing GMS_checkout_time for ID ${id}`);
     return res.status(400).json({ error: 'Checkout time is required' });
   }
-
   const checkQuery = 'SELECT * FROM public."GMS_LogVehicleEntry" WHERE "GMS_id" = $1';
-
   try {
     const checkResult = await db.query(checkQuery, [id]);
-
     if (checkResult.rowCount === 0) {
       return res.status(404).json({ error: 'Vehicle entry not found' });
     }
-
     const updateQuery = `
       UPDATE public."GMS_LogVehicleEntry"
       SET 
@@ -5762,12 +4581,10 @@ app.put('/vehicle-entry/checkout/:id', async (req, res) => {
       WHERE "GMS_id" = $2
       RETURNING *
     `;
-
     const result = await db.query(updateQuery, [
       GMS_checkout_time,
       id
     ]);
-
     return res.status(200).json({
       message: 'Vehicle checkout recorded successfully',
       data: result.rows[0]
@@ -5780,23 +4597,17 @@ app.put('/vehicle-entry/checkout/:id', async (req, res) => {
     });
   }
 });
-
 // Delete Vehicle Entry
 app.delete('/Delvehicle-entry/:id', async (req, res) => {
   const id = req.params.id;
-
   const checkQuery = 'SELECT * FROM public."GMS_LogVehicleEntry" WHERE "GMS_id" = $1';
-
   try {
     const checkResult = await db.query(checkQuery, [id]);
-
     if (checkResult.rowCount === 0) {
       return res.status(404).json({ error: 'Vehicle entry not found' });
     }
-
     const deleteQuery = 'DELETE FROM public."GMS_LogVehicleEntry" WHERE "GMS_id" = $1 RETURNING *';
     const result = await db.query(deleteQuery, [id]);
-
     return res.status(200).json({
       message: 'Vehicle entry deleted successfully',
       data: result.rows[0]
@@ -5809,16 +4620,11 @@ app.delete('/Delvehicle-entry/:id', async (req, res) => {
     });
   }
 });
-
 /* ---------------------------------------     Vehicle APIs End    ------------------------------------------------- */
-
-
 /* ---------------------------------------     Material Movement APIs    ------------------------------------------------- */
-
 // Get All Material Movements
 app.get('/material-movement', (req, res) => {
   const fetchQuery = 'SELECT * FROM public."GMS_MaterialMovement" ORDER BY "GMS_id" DESC';
-
   db.query(fetchQuery, (err, result) => {
     if (err) {
       console.error("Error fetching all material movements:", err);
@@ -5827,12 +4633,10 @@ app.get('/material-movement', (req, res) => {
     return res.status(200).json(result.rows);
   });
 });
-
 // Get Single Material Movement
 app.get('/Editmaterial-movement/:id', (req, res) => {
   const id = req.params.id;
   const fetchQuery = 'SELECT * FROM public."GMS_MaterialMovement" WHERE "GMS_id" = $1';
-
   db.query(fetchQuery, [id], (err, result) => {
     if (err) {
       console.error(`Error fetching material movement with ID ${id}:`, err);
@@ -5844,7 +4648,6 @@ app.get('/Editmaterial-movement/:id', (req, res) => {
     return res.status(200).json(result.rows[0]);
   });
 });
-
 // Create New Material Movement
 app.post('/AddNewmaterial-movement', async (req, res) => {
   const {
@@ -5861,7 +4664,6 @@ app.post('/AddNewmaterial-movement', async (req, res) => {
     GMS_attachments,
     GMS_material_type
   } = req.body;
-
   const requiredFields = [
     'GMS_material_name',
     'GMS_quantity',
@@ -5874,7 +4676,6 @@ app.post('/AddNewmaterial-movement', async (req, res) => {
     'GMS_material_code',
     'GMS_material_type'
   ];
-
   const missingFields = requiredFields.filter(field => !req.body[field]);
   if (missingFields.length > 0) {
     console.warn("Missing required fields on insert:", missingFields);
@@ -5883,7 +4684,6 @@ app.post('/AddNewmaterial-movement', async (req, res) => {
       missingFields
     });
   }
-
   const insertQuery = `
     INSERT INTO public."GMS_MaterialMovement" (
       "GMS_material_name", "GMS_quantity", "GMS_unit", 
@@ -5894,7 +4694,6 @@ app.post('/AddNewmaterial-movement', async (req, res) => {
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
     RETURNING *
   `;
-
   try {
     const result = await db.query(insertQuery, [
       GMS_material_name,
@@ -5910,7 +4709,6 @@ app.post('/AddNewmaterial-movement', async (req, res) => {
       GMS_attachments || '[]',
       GMS_material_type
     ]);
-
     return res.status(201).json({
       message: 'Material movement created successfully',
       data: result.rows[0]
@@ -5923,7 +4721,6 @@ app.post('/AddNewmaterial-movement', async (req, res) => {
     });
   }
 });
-
 // Update Material Movement
 app.put('/Editmaterial-movement/:id', async (req, res) => {
   const id = req.params.id;
@@ -5941,16 +4738,12 @@ app.put('/Editmaterial-movement/:id', async (req, res) => {
     GMS_attachments,
     GMS_material_type
   } = req.body;
-
   const checkQuery = 'SELECT * FROM public."GMS_MaterialMovement" WHERE "GMS_id" = $1';
-
   try {
     const checkResult = await db.query(checkQuery, [id]);
-
     if (checkResult.rowCount === 0) {
       return res.status(404).json({ error: 'Material movement not found' });
     }
-
     const updateQuery = `
       UPDATE public."GMS_MaterialMovement"
       SET 
@@ -5970,7 +4763,6 @@ app.put('/Editmaterial-movement/:id', async (req, res) => {
       WHERE "GMS_id" = $13
       RETURNING *
     `;
-
     const result = await db.query(updateQuery, [
       GMS_material_name || checkResult.rows[0].GMS_material_name,
       GMS_quantity || checkResult.rows[0].GMS_quantity,
@@ -5986,7 +4778,6 @@ app.put('/Editmaterial-movement/:id', async (req, res) => {
       GMS_material_type || checkResult.rows[0].GMS_material_type,
       id
     ]);
-
     return res.status(200).json({
       message: 'Material movement updated successfully',
       data: result.rows[0]
@@ -5999,23 +4790,17 @@ app.put('/Editmaterial-movement/:id', async (req, res) => {
     });
   }
 });
-
 // Delete Material Movement
 app.delete('/Delmaterial-movement/:id', async (req, res) => {
   const id = req.params.id;
-
   const checkQuery = 'SELECT * FROM public."GMS_MaterialMovement" WHERE "GMS_id" = $1';
-
   try {
     const checkResult = await db.query(checkQuery, [id]);
-
     if (checkResult.rowCount === 0) {
       return res.status(404).json({ error: 'Material movement not found' });
     }
-
     const deleteQuery = 'DELETE FROM public."GMS_MaterialMovement" WHERE "GMS_id" = $1 RETURNING *';
     const result = await db.query(deleteQuery, [id]);
-
     return res.status(200).json({
       message: 'Material movement deleted successfully',
       data: result.rows[0]
@@ -6028,10 +4813,7 @@ app.delete('/Delmaterial-movement/:id', async (req, res) => {
     });
   }
 });
-
 /* ---------------------------------------     Material Movement APIs End    ------------------------------------------------- */
-
-
 /* ---------------------------------------     Dashbord Views Start    ------------------------------------------------- */
 
 app.get('/Dashboard_combined_view_VW', async (req, res) => {
@@ -6049,7 +4831,6 @@ app.get('/Dashboard_combined_view_VW', async (req, res) => {
 
 app.post('/manual-checkout', async (req, res) => {
   const { gateEntryId, modifiedBy } = req.body;
-
   try {
     const result = await db.query(
       `UPDATE public.gms_gate_entries
@@ -6063,11 +4844,9 @@ app.post('/manual-checkout', async (req, res) => {
        RETURNING *`,
       [gateEntryId, modifiedBy]
     );
-
     if (result.rowCount === 0) {
       return res.status(404).json({ message: 'No active visitor found or already checked out.' });
     }
-
     res.status(200).json({
       message: 'Visitor successfully checked out.',
       updatedVisitor: result.rows[0]
@@ -6077,19 +4856,13 @@ app.post('/manual-checkout', async (req, res) => {
     res.status(500).json({ message: 'Server error during manual checkout' });
   }
 });
-
 /* ---------------------------------------     Dashbord Views End    ------------------------------------------------- */
-
-
 /* ---------------------------------------     Pre Booking Start    ------------------------------------------------- */
-
 // 1. CREATE - Add new pre-booking
 app.post('/appointments', async (req, res) => {
   const { visitor_name, phone_number, email, visitor_from, to_meet, purpose, booking_date, booking_time, expected_exit_time, id_type, id_number, vehicle_no } = req.body;
-
   // Server-side validation
   const requiredFields = ['visitor_name', 'phone_number', 'email', 'visitor_from', 'to_meet', 'purpose', 'booking_date', 'booking_time', 'id_type', 'id_number'];
-
   const missingFields = requiredFields.filter(field => !req.body[field]);
   if (missingFields.length > 0) {
     return res.status(400).json({
@@ -6097,7 +4870,6 @@ app.post('/appointments', async (req, res) => {
       missing_fields: missingFields
     });
   }
-
   try {
     const client = await db.connect();
     const result = await client.query(
@@ -6112,14 +4884,12 @@ app.post('/appointments', async (req, res) => {
       [visitor_name, phone_number, email, visitor_from, to_meet, purpose, booking_date, booking_time, expected_exit_time || null, id_type, id_number, vehicle_no || null, 'Pending']
     );
     client.release();
-
     const newBooking = result.rows[0];
     res.status(201).json({
       message: 'Pre-booking created successfully',
       booking_id: newBooking.gms_pre_booking_id,
       status: newBooking.gms_status
     });
-
   } catch (err) {
     console.error('Error creating pre-booking:', err);
     res.status(500).json({
@@ -6128,7 +4898,6 @@ app.post('/appointments', async (req, res) => {
     });
   }
 });
-
 // 2. READ - Get all pre-bookings
 app.get('/allappointments', async (req, res) => {
   try {
@@ -6142,13 +4911,11 @@ app.get('/allappointments', async (req, res) => {
       FROM gms_pre_booking
       ORDER BY gms_booking_date DESC, gms_booking_time DESC
     `);
-
     res.json({
       success: true,
       data: rows,
       count: rows.length
     });
-
   } catch (error) {
     console.error('Database error:', error);
     res.status(500).json({
@@ -6157,7 +4924,6 @@ app.get('/allappointments', async (req, res) => {
     });
   }
 });
-
 // 3. READ - Get single pre-booking by ID
 app.get('/preBookings/:id', async (req, res) => {
   try {
@@ -6165,19 +4931,16 @@ app.get('/preBookings/:id', async (req, res) => {
       `SELECT * FROM gms_pre_booking WHERE gms_pre_booking_id = $1`,
       [req.params.id]
     );
-
     if (rows.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'Pre-booking not found'
       });
     }
-
     res.json({
       success: true,
       data: rows[0]
     });
-
   } catch (error) {
     console.error('Database error:', error);
     res.status(500).json({
@@ -6186,33 +4949,26 @@ app.get('/preBookings/:id', async (req, res) => {
     });
   }
 });
-
 // 4. UPDATE - Update pre-booking status
 app.put('/updateappointments/:id', async (req, res) => {
   const { id } = req.params;
   const { gms_status } = req.body;
-
   try {
     const updateQuery = `
           UPDATE gms_pre_booking 
           SET gms_status = $1, gms_updated_at = NOW()
           WHERE gms_pre_booking_id = $2
           RETURNING *`;
-
     const result = await db.query(updateQuery, [gms_status, id]);
-
     if (result.rowCount === 0) {
       return res.status(404).json({ message: 'Visitor not found' });
     }
-
     res.status(200).json({ message: 'Status updated successfully', visitor: result.rows[0] });
   } catch (error) {
     console.error('Error updating status:', error);
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });
-
-
 // 5. DELETE - Cancel pre-booking
 app.delete('/pre-bookings/:id', async (req, res) => {
   try {
@@ -6220,19 +4976,16 @@ app.delete('/pre-bookings/:id', async (req, res) => {
       `DELETE FROM gms_pre_booking WHERE gms_pre_booking_id = $1`,
       [req.params.id]
     );
-
     if (rowCount === 0) {
       return res.status(404).json({
         success: false,
         error: 'Pre-booking not found'
       });
     }
-
     res.json({
       success: true,
       message: 'Pre-booking cancelled successfully'
     });
-
   } catch (error) {
     console.error('Database error:', error);
     res.status(500).json({
@@ -6241,19 +4994,8 @@ app.delete('/pre-bookings/:id', async (req, res) => {
     });
   }
 });
-
-/* ---------------------------------------     Pre Booking End    ------------------------------------------------- */
-/* ---------------------------------------     Pre Booking End    ------------------------------------------------- */
-/* ---------------------------------------     Pre Booking End    ------------------------------------------------- */
-/* ---------------------------------------     Pre Booking End    ------------------------------------------------- */
-/* ---------------------------------------     Pre Booking End    ------------------------------------------------- */
-
-
-
-
 ////-------------------------------------End here ------------------------------------------------------////
 app.listen(PORT, () => {
   console.log("Connected to backend connection..");
   console.log(`Server running on http://ServerPort:${PORT}`);
 });
-

@@ -32,13 +32,6 @@ function EditRoleModel({ setTitle }) {
         const username = ReactSession.get("username");
         setRoleValues(prevValues => ({ ...prevValues, Roles_Modified_BY: username }));
 
-        axios.get(`${SERVER_PORT}/Business_active`)
-            .then(res => setBusinessunitValues(res.data))
-            .catch(err => console.log(err));
-
-        axios.get(`${SERVER_PORT}/organisation_active`)
-            .then(res => setOrganisationBusinessValues(res.data))
-            .catch(err => console.log(err));
 
         axios.get(`${SERVER_PORT}/roles/` + id)
             .then(res => {

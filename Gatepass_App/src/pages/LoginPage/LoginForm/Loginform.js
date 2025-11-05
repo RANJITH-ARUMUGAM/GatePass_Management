@@ -45,55 +45,11 @@ function Loginform({ setIsLoggedIn }) {
     }, 3000);
   };
 
-  // const login = async (e) => {
-  //   e.preventDefault();
-  //   console.log("Login form submitted");
-  //   console.log("Username:", username);
-  //   console.log("Password:", password);
-
-  //   try {
-  //     const response = await axios.post(`${SERVER_PORT}/user_login`, {
-  //       username,
-  //       password,
-  //     });
-
-  //     console.log("API Response:", response.data);
-
-  //     if (response.data.success) {
-  //       showAlert("success", "Success!", "Login Successful.");
-
-  //       ReactSession.setStoreType("sessionStorage");
-  //       ReactSession.set("username", response.data.loginid); // optional for display
-  //       // ReactSession.set("userrole", response.data.loginid); 
-  //       ReactSession.set("userrole", response.data.UserRole);
-  //       sessionStorage.setItem("userId", response.data.id); // INTEGER for punch use
-  //       sessionStorage.setItem("name", response.data.name);
-  //       sessionStorage.setItem("avatar", response.data.avatar);
-
-  //       setIsLoggedIn(true);
-  //       navigate("/");
-  //     } else {
-  //       if (response.data.status === "inactive") {
-  //         console.warn("Account inactive");
-  //         showAlert("warning", "Account Inactive!", "Your account is not active. Please contact the administrator.");
-  //       } else {
-  //         console.warn("Invalid login credentials");
-  //         showAlert("error", "Login Failed!", "Invalid login credentials.");
-  //       }
-  //     }
-  //   } catch (error) {
-  //     console.error("Login error:", error);
-  //     showAlert("error", "Server Error!", "Something went wrong. Please try again later.");
-  //   }
-  // };
-
-
-  // Replace your current login function with this updated version
   const login = async (e) => {
     e.preventDefault();
-    console.log("Login form submitted");
-    console.log("Username:", username);
-    console.log("Password:", password);
+    // console.log("Login form submitted");
+    // console.log("Username:", username);
+    // console.log("Password:", password);
 
     try {
       const response = await axios.post(`${SERVER_PORT}/user_login`, {
@@ -101,7 +57,7 @@ function Loginform({ setIsLoggedIn }) {
         password,
       });
 
-      console.log("API Response:", response.data);
+      // console.log("API Response:", response.data);
 
       if (response.data.success) {
         showAlert("success", "Success!", "Login Successful.");
@@ -112,6 +68,7 @@ function Loginform({ setIsLoggedIn }) {
         // Save user details to session
         ReactSession.set("username", response.data.loginid);
         ReactSession.set("userrole", response.data.UserRole);
+        // ReactSession.set("userrole", "Administrator"); // Hardcoded for testing
         sessionStorage.setItem("userId", response.data.id);
         sessionStorage.setItem("name", response.data.name);
 
@@ -132,7 +89,7 @@ function Loginform({ setIsLoggedIn }) {
           }
 
           ReactSession.set("profileimage", profileImage);
-          console.log("✅ Profile image processed and stored in session.");
+          // console.log("✅ Profile image processed and stored in session.");
         } else {
           ReactSession.set("profileimage", null);
         }

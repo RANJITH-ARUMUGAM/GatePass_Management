@@ -4,7 +4,7 @@ import {
   Container, Row, Col, Card, Button, Spinner, Alert, Badge, Table, Form
 } from 'react-bootstrap';
 import axios from 'axios';
-import "../Admin/UserList.css";
+import "../../Adminstor/AdminUsers/UserList.css";
 import { SERVER_PORT } from '../../../constant'; 
 
 const ViewEmployee = () => {

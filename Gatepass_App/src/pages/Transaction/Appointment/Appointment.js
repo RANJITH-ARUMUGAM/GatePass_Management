@@ -132,7 +132,7 @@ const Appointment = () => {
 
     return (
         <div className="min-h-screen mt-1">
-            <div className="bg-white shadow-xl rounded-xl p-1 sm:p-8 lg:p-10">
+            <div className="shadow-xl rounded-xl p-1 sm:p-8 lg:p-10">
                 <h1 className="text-3xl sm:text-4xl font-semibold text-center text-indigo-600 mb-4">
                     Appointments Here!
                 </h1>
@@ -151,7 +151,7 @@ const Appointment = () => {
                                 name="gms_visitor_name"
                                 value={formData.gms_visitor_name}
                                 onChange={handleChange}
-                                className="pl-3 text-xs py-1.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                                className="pl-3 text-xs py-2.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
                                 placeholder="John Doe"
                                 required
                             />
@@ -168,7 +168,7 @@ const Appointment = () => {
                                 name="gms_phone_number"
                                 value={formData.gms_phone_number}
                                 onChange={handleChange}
-                                className="pl-3 text-xs py-1.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                                className="pl-3 text-xs py-2.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
                                 placeholder="+1234567890"
                                 required
                             />
@@ -185,7 +185,7 @@ const Appointment = () => {
                                 name="gms_email"
                                 value={formData.gms_email}
                                 onChange={handleChange}
-                                className="pl-3 text-xs py-1.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                                className="pl-3 text-xs py-2.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
                                 placeholder="john.doe@example.com"
                                 required
                             />
@@ -202,7 +202,7 @@ const Appointment = () => {
                                 name="gms_visitor_from"
                                 value={formData.gms_visitor_from}
                                 onChange={handleChange}
-                                className="pl-3 text-xs py-1.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                                className="pl-3 text-xs py-2.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
                                 placeholder="Acme Corp / New York"
                                 required
                             />
@@ -219,7 +219,7 @@ const Appointment = () => {
                                 name="gms_to_meet"
                                 value={formData.gms_to_meet}
                                 onChange={handleChange}
-                                className="pl-3 text-xs py-1.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                                className="pl-3 text-xs py-2.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
                                 placeholder="Jane Smith"
                                 required
                             />
@@ -234,7 +234,7 @@ const Appointment = () => {
                             value={formData.gms_purpose}
                             onChange={handleChange}
                             rows="1"
-                            className="text-xs pl-3 py-1.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                            className="text-xs pl-3 py-4 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
                             placeholder="Meeting with Jane Smith regarding project X"
                             required
                         ></textarea>
@@ -255,7 +255,7 @@ const Appointment = () => {
                                 name="gms_booking_date"
                                 value={formData.gms_booking_date}
                                 onChange={handleChange}
-                                className="pl-3 text-xs py-1.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                                className="pl-3 text-xs py-2.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
                                 required
                             />
                         </div>
@@ -271,7 +271,7 @@ const Appointment = () => {
                                 name="gms_booking_time"
                                 value={formData.gms_booking_time}
                                 onChange={handleChange}
-                                className="pl-3 text-xs py-1.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                                className="pl-3 text-xs py-2.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
                                 disabled
                             />
                         </div>
@@ -287,7 +287,7 @@ const Appointment = () => {
                                 name="gms_expected_exit_time"
                                 value={formData.gms_expected_exit_time}
                                 onChange={handleChange}
-                                className="pl-3 text-xs py-1.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                                className="pl-3 text-xs py-2.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
                             />
                         </div>
                     </div>
@@ -302,7 +302,7 @@ const Appointment = () => {
                                 name="gms_id_type"
                                 value={formData.gms_id_type}
                                 onChange={handleChange}
-                                className="pl-3 text-xs py-1.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200 bg-white"
+                                className="pl-3 text-xs py-2.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200 bg-white"
                                 required
                             >
                                 <option value="">Select ID Type</option>
@@ -324,7 +324,7 @@ const Appointment = () => {
                                 name="gms_id_number"
                                 value={formData.gms_id_number}
                                 onChange={handleChange}
-                                className="pl-3 text-xs py-1.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                                className="pl-3 text-xs py-2.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
                                 placeholder="1234 5678 9012"
                                 required
                             />
@@ -341,22 +341,22 @@ const Appointment = () => {
                                 name="gms_vehicle_no"
                                 value={formData.gms_vehicle_no}
                                 onChange={handleChange}
-                                className="pl-3 text-xs py-1.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                                className="pl-3 text-xs py-2.5 w-full border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
                                 placeholder="AB12 CD3456"
                             />
                         </div>
                     </div>
 
                     <div className="md:col-span-4 flex -mt-10 justify-end gap-3">
+                        <button type="submit"
+                            className="w-full sm:w-auto px-4 py-0 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition duration-300 ease-in-out transform hover:-translate-y-1 hover:scale-105"
+                        >
+                            Add 
+                        </button>
                         <button type="cencel"
                             className="w-full sm:w-auto px-2 py-1 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition duration-300 ease-in-out transform hover:-translate-y-1 hover:scale-105"
                         >
                             Cencel
-                        </button>
-                        <button type="submit"
-                            className="w-full sm:w-auto px-2 py-0 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition duration-300 ease-in-out transform hover:-translate-y-1 hover:scale-105"
-                        >
-                            Submit
                         </button>
                     </div>
                 </form>

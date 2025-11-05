@@ -12,7 +12,7 @@ import {
 import { ArrowLeft, Save } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
-import '../Admin/UserList.css';
+import '../../Adminstor/AdminUsers/UserList.css';
 import { SERVER_PORT } from '../../../constant';
 
 

@@ -4,7 +4,7 @@ import { BsPerson, BsPrinter, BsQrCode, BsSearch, BsClock, BsEye } from 'react-i
 import QRCode from 'react-qr-code';
 import axios from 'axios';
 import './VisitorPass.css';
-import '../Admin/UserList.css';
+import '../../Adminstor/AdminUsers/UserList.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import QRious from 'qrious';
 import { SERVER_PORT } from '../../../constant';

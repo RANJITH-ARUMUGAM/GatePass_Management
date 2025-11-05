@@ -5,7 +5,7 @@ import { PlusCircle } from 'lucide-react';
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion"; // Import motion for animations
 import axios from "axios";
-import "../Admin/UserList.css";
+import "../../Adminstor/AdminUsers/UserList.css";
 import CustomAlert from "../../../CustomAlert";
 import { SERVER_PORT } from '../../../constant';
 

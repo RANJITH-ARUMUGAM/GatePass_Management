@@ -6,7 +6,7 @@ import axios from 'axios';
 import { useNavigate, useLocation } from 'react-router-dom';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
-import "../Admin/UserList.css";
+import "../../Adminstor/AdminUsers/UserList.css";
 import { SERVER_PORT } from '../../../constant'; 
 
 

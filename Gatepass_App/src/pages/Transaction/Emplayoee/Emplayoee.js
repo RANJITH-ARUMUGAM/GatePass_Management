@@ -4,7 +4,7 @@ import { FaArrowLeft, FaArrowRight, FaSearch, FaUserTie, FaBuilding, FaCheckCirc
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import axios from 'axios';
-import "../Admin/UserList.css";
+import "../../Adminstor/AdminUsers/UserList.css";
 import { SERVER_PORT } from '../../../constant';
 
 const Employees = ({ setTitle }) => {

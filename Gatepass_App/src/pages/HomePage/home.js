@@ -3,7 +3,6 @@ import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import { ReactSession } from 'react-client-session';
 import '../HomePage/home.css';
 import '../HomePage/BreadCrumBar/BreadCrum.css';
-// import '../HomePage/App.css';
 import { SERVER_PORT } from '../../constant';
 import axios from 'axios'
 
@@ -21,11 +20,6 @@ import Meta from "../MetaData/MetaForm.js";
 
 
 //Transactions
-import User from "../Transaction/Admin/UserList.js";
-import Edituser from "../Transaction/Admin/Edituser.js";
-import Adduser from "../Transaction/Admin/AddUsers.js";
-
-
 import AddGateEntry from "../Transaction/VisitorsDetails/AddGateEntry.js";
 import GenerateVisitorIDCard from "../Transaction/VisitorsDetails/GenerateVisitorIDCard.js";
 import VisitorsDetails from '../Transaction/VisitorsDetails/VisitorsDetails.js';
@@ -72,13 +66,11 @@ import Roles from "../Adminstor/Roles/Roles"
 import AddRolesModel from "../Adminstor/Roles/AddRolesModel";
 import EditRolesModel from "../Adminstor/Roles/EditRolesModel";
 import RoleProgram from "../Adminstor/RoleProgram/RoleProgram";
-import Users from "../Adminstor/Users/Users";
-import AddUsersModel from "../Adminstor/Users/AddUsersModel";
-import EditUsersModel from "../Adminstor/Users/EditUserModel";
 import UserRole from "../Adminstor/UserRole/UserRole";
 import UserRoleView from "../Adminstor/UserRoleView/UserRoleView"
-import ProfileView from "../Adminstor/Users/ProfileView"
-
+import AdminUser from "../Adminstor/AdminUsers/UserList.js";
+import AdminAdduser from "../Adminstor/AdminUsers/AddUsers.js";
+import AdminEdituser from "../Adminstor/AdminUsers/Edituser.js";
 
 
 
@@ -709,9 +701,10 @@ export default function Home() {
         <Breadcrumbs />
         <Routes>
           <Route path="/" element={<Card setTitle={setTitle} />} />
-          <Route path="/user" element={<User setTitle={setTitle} />} />
-          <Route path="/user/adduser" element={<Adduser setTitle={setTitle} />} />
-          <Route path="/user/edituser" element={<Edituser setTitle={setTitle} />} />
+          
+          <Route path="/adminUser" element={<AdminUser setTitle={setTitle} />} />
+          <Route path="/adminUser/AdminAdduser" element={<AdminAdduser setTitle={setTitle} />} />
+          <Route path="/adminUser/AdminEdituser" element={<AdminEdituser setTitle={setTitle} />} />
 
           <Route path="/editprofile" element={<EditProfile setTitle={setTitle} />} />
           <Route path="/ChangePassword" element={<ChangePassword setTitle={setTitle} />} />
@@ -764,11 +757,6 @@ export default function Home() {
           <Route path="/addroles" element={<AddRolesModel setTitle={setTitle} />} />
           <Route path="/editroles/:id" element={<EditRolesModel setTitle={setTitle} />} />
           <Route path="/roleprogram" element={<RoleProgram setTitle={setTitle} />} />
-
-          <Route path="/Users" element={<Users setTitle={setTitle} />} />
-          <Route path="/Users/addusersmodel" element={<AddUsersModel setTitle={setTitle} />} />
-          <Route path="/Users/edituser/:id" element={<EditUsersModel setTitle={setTitle} />} />
-          <Route path="/profileview/:id" element={<ProfileView setTitle={setTitle} />} />
 
           <Route path="/userrole" element={<UserRole setTitle={setTitle} />} />
           <Route path="/UserRoleView" element={<UserRoleView setTitle={setTitle} />} />
